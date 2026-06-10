@@ -23,10 +23,6 @@
   ],
   "crons": [
     {
-      "path": "/api/jobs/run",
-      "schedule": "* * * * *"
-    },
-    {
       "path": "/api/cron/daily-email",
       "schedule": "0 12 * * *"
     }

@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Password-protected record manager with MongoDB storage.",
   "main": "server/index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "predev": "npm run stop",
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",

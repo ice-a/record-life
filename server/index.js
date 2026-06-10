@@ -1335,7 +1335,8 @@ app.get('/api/cron/daily-email', async (req, res, next) => {
       aiConfigId: process.env.DAILY_EMAIL_AI_CONFIG_ID || '',
       notifyBark: String(process.env.DAILY_BARK_ENABLED || 'true').toLowerCase() !== 'false',
     });
-    res.status(202).json({ queued: true, job: publicJob(job) });
+    const results = await runQueuedJobs({ limit: Number(process.env.JOB_RUN_LIMIT || 2) });
+    res.status(202).json({ queued: true, job: publicJob(job), processed: results.length, results });
   } catch (error) {
     next(error);
   }
@@ -1574,6 +1575,10 @@ app.use((error, req, res, next) => {
 });
 
 function scheduleDailyDigest() {
+  if (process.env.VERCEL === '1') {
+    return;
+  }
+
   if (String(process.env.DAILY_EMAIL_ENABLED || '').toLowerCase() !== 'true') {
     return;
   }

@@ -4,7 +4,6 @@ dist
 .env.local
 .env.*.local
 .vercel
-.wrangler
 coverage
 .nyc_output
 .DS_Store
