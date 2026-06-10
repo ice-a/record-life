@@ -51,7 +51,9 @@ JOB_LOCK_MS=240000
 LOCAL_JOB_RUNNER_INTERVAL_MS=30000
 
 BARK_DEFAULT_BASE_URL=https://api.day.app
-IMAGE_UPLOAD_ENDPOINT=https://telegra.ph/upload
+IMAGE_UPLOAD_ENDPOINT=https://img.example.com/upload
+IMAGE_UPLOAD_AUTH_CODE=change-this-image-auth-code
+IMAGE_UPLOAD_PUBLIC_BASE_URL=https://img.example.com
 IMAGE_MAX_BYTES=4194304
 WEB_FETCH_TIMEOUT_MS=10000
 ```

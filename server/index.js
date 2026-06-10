@@ -528,32 +528,62 @@ async function extractWebpage(url) {
 }
 
 async function uploadToImageBed(file) {
-  const endpoint = process.env.IMAGE_UPLOAD_ENDPOINT || 'https://telegra.ph/upload';
+  if (!process.env.IMAGE_UPLOAD_ENDPOINT) {
+    throw new Error('缺少 IMAGE_UPLOAD_ENDPOINT，无法上传图片。');
+  }
+
+  const endpointUrl = new URL(process.env.IMAGE_UPLOAD_ENDPOINT);
+  const authCode = process.env.IMAGE_UPLOAD_AUTH_CODE;
+  const publicBaseUrl = process.env.IMAGE_UPLOAD_PUBLIC_BASE_URL || endpointUrl.origin;
+
+  if (authCode && !endpointUrl.searchParams.has('authCode')) {
+    endpointUrl.searchParams.set('authCode', authCode);
+  }
+  if (!endpointUrl.searchParams.has('returnFormat')) {
+    endpointUrl.searchParams.set('returnFormat', 'full');
+  }
+
   const form = new FormData();
   form.append('file', new Blob([file.buffer], { type: file.mimetype }), file.originalname || 'image');
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(endpointUrl, {
     method: 'POST',
     body: form,
   });
-  const data = await response.json().catch(() => null);
+  const responseText = await response.text();
+  let data = null;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    data = null;
+  }
 
   if (!response.ok) {
-    throw new Error(data?.message || '图片上传失败。');
+    throw new Error(data?.message || responseText || '图片上传失败。');
   }
 
   const src =
+    (typeof data === 'string' ? data : '') ||
     data?.url ||
     data?.data?.url ||
     data?.data?.links?.url ||
     data?.src ||
-    (Array.isArray(data) ? data[0]?.src : '');
+    (Array.isArray(data) ? data[0]?.url || data[0]?.src : '') ||
+    responseText;
 
-  if (!src) {
+  const normalizedSrc = String(src || '').trim();
+  if (!normalizedSrc) {
     throw new Error('图片上传成功但没有返回 URL。');
   }
 
-  return src.startsWith('http') ? src : `https://telegra.ph${src}`;
+  if (/^https?:\/\//i.test(normalizedSrc)) {
+    return normalizedSrc;
+  }
+  if (normalizedSrc.startsWith('//')) {
+    return `https:${normalizedSrc}`;
+  }
+
+  return new URL(normalizedSrc, publicBaseUrl).toString();
 }
 
 function getSmtpTransporter() {
