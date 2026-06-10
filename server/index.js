@@ -980,10 +980,10 @@ async function runQueuedJobs({ limit = Number(process.env.JOB_RUN_LIMIT || 2) } 
 
 async function ensureDatabase() {
   if (!mongoUri) {
-    throw new Error('缺少 MONGODB_URI，请先创建 .env。');
+    throw new Error('缺少 MONGODB_URI，请在 .env 或部署平台环境变量中配置。');
   }
   if (!appPassword) {
-    throw new Error('缺少 APP_PASSWORD，请先创建 .env。');
+    throw new Error('缺少 APP_PASSWORD，请在 .env 或部署平台环境变量中配置。');
   }
 
   mongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 5000 });
