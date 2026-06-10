@@ -4,7 +4,7 @@
   "description": "Password-protected record manager with MongoDB storage.",
   "main": "server/index.js",
   "engines": {
-    "node": ">=20"
+    "node": "24.x"
   },
   "scripts": {
     "predev": "npm run stop",

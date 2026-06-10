@@ -90,7 +90,7 @@ WEB_FETCH_TIMEOUT_MS=10000
 
 ## 本地开发
 
-本地开发需要 Node.js 20 或更高版本，以及可连接的 MongoDB。
+本地开发建议使用 Node.js 24，与 Vercel 部署运行时保持一致，并准备可连接的 MongoDB。
 
 ```bash
 npm install
@@ -121,7 +121,7 @@ http://127.0.0.1:5173
 
 适合 Windows、Linux 服务器、NAS 或内网机器。你需要自己准备：
 
-- Node.js 20 或更高版本
+- Node.js 24
 - MongoDB
 - 一个能长期运行 Node 进程的方式，例如 Windows 任务计划程序、NSSM、系统服务或进程守护工具
 
