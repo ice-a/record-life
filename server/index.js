@@ -992,7 +992,7 @@ async function ensureDatabase() {
   await records()
     .dropIndex('title_text_summary_text_remarks_text_tags_text')
     .catch((error) => {
-      if (error.codeName !== 'IndexNotFound') {
+      if (!['IndexNotFound', 'NamespaceNotFound'].includes(error.codeName)) {
         throw error;
       }
     });
