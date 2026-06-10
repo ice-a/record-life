@@ -1,0 +1,16 @@
+[Unit]
+Description=RE Save
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/re-save
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/re-save/server/index.js
+Restart=always
+RestartSec=5
+User=re-save
+Group=re-save
+
+[Install]
+WantedBy=multi-user.target

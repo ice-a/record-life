@@ -1,0 +1,1531 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import {
+  Bell,
+  Bot,
+  Check,
+  Copy,
+  Edit3,
+  ExternalLink,
+  FileText,
+  Globe,
+  ImagePlus,
+  KeyRound,
+  Link,
+  Loader2,
+  LogOut,
+  Mail,
+  Plus,
+  RefreshCw,
+  Save,
+  Search,
+  Send,
+  Share2,
+  Sparkles,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import './styles.css';
+
+const emptyRecord = {
+  id: '',
+  title: '',
+  categoryId: '',
+  priority: 3,
+  sourceType: 'manual',
+  url: '',
+  summary: '',
+  content: '',
+  markdown: '',
+  tags: '',
+  imageUrls: [],
+};
+
+const emptyAiConfig = {
+  id: '',
+  name: '',
+  provider: '',
+  baseUrl: '',
+  model: '',
+  apiKey: '',
+  temperature: '0.2',
+  maxTokens: '',
+  isDefault: false,
+};
+
+const emptyContact = {
+  id: '',
+  name: '',
+  email: '',
+  group: '',
+  barkBaseUrl: 'https://api.day.app',
+  barkToken: '',
+  active: true,
+};
+
+async function api(path, options = {}) {
+  const hasBody = options.body && !(options.body instanceof FormData);
+  const response = await fetch(path, {
+    credentials: 'include',
+    ...options,
+    headers: {
+      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {}),
+    },
+  });
+
+  if (response.status === 204) return null;
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || '请求失败');
+  return data;
+}
+
+function toTagText(tags) {
+  return Array.isArray(tags) ? tags.join(', ') : tags || '';
+}
+
+function normalizeRecord(record) {
+  return { ...emptyRecord, ...record, tags: toTagText(record.tags), imageUrls: record.imageUrls || [] };
+}
+
+function normalizeAiConfig(config) {
+  return {
+    ...emptyAiConfig,
+    ...config,
+    apiKey: '',
+    temperature: config.temperature ?? '',
+    maxTokens: config.maxTokens ?? '',
+  };
+}
+
+function normalizeContact(contact) {
+  return { ...emptyContact, ...contact, active: contact.active !== false };
+}
+
+function todayText() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatDate(value) {
+  if (!value) return '';
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
+function Field({ label, children }) {
+  return (
+    <div className="grid gap-2">
+      <Label>{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function SectionHeader({ eyebrow, title, description, action }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-normal text-primary">{eyebrow}</p>
+        <h2 className="truncate text-lg font-semibold">{title}</h2>
+        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function Login({ onLogin }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await api('/api/login', { method: 'POST', body: JSON.stringify({ password }) });
+      onLogin();
+    } catch (loginError) {
+      setError(loginError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center p-6">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <KeyRound className="h-5 w-5" />
+          </div>
+          <CardTitle>RE Save</CardTitle>
+          <CardDescription>输入访问密码进入记录工作台</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-4" onSubmit={submit}>
+            <Field label="访问密码">
+              <Input
+                autoFocus
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="请输入密码"
+              />
+            </Field>
+            {error ? (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : null}
+            <Button type="submit" disabled={loading || !password}>
+              {loading ? <Loader2 className="spin" /> : <KeyRound />}
+              进入
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </main>
+  );
+}
+
+function CategoryPanel({ categories, activeCategoryId, recordCounts, onSelect, onCreate, creating }) {
+  const [name, setName] = useState('');
+  const total = Object.values(recordCounts).reduce((sum, count) => sum + count, 0);
+
+  async function submit(event) {
+    event.preventDefault();
+    const created = await onCreate(name);
+    if (created) setName('');
+  }
+
+  return (
+    <Card className="min-h-0">
+      <CardHeader>
+        <SectionHeader eyebrow="分类" title="内容分组" />
+      </CardHeader>
+      <CardContent className="flex h-[calc(100%-5rem)] flex-col gap-3">
+        <div className="grid gap-1">
+          <button
+            type="button"
+            className={`flex items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${activeCategoryId === '' ? 'bg-accent text-accent-foreground' : 'hover:bg-accent'}`}
+            onClick={() => onSelect('')}
+          >
+            <span>全部记录</span>
+            <Badge variant="secondary">{total}</Badge>
+          </button>
+          <div className="grid gap-1 overflow-auto">
+            {categories.map((category) => (
+              <button
+                type="button"
+                key={category.id}
+                className={`flex items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${activeCategoryId === category.id ? 'bg-accent text-accent-foreground' : 'hover:bg-accent'}`}
+                onClick={() => onSelect(category.id)}
+              >
+                <span className="truncate">{category.name}</span>
+                <Badge variant="secondary">{recordCounts[category.id] || 0}</Badge>
+              </button>
+            ))}
+          </div>
+        </div>
+        <form className="mt-auto flex gap-2" onSubmit={submit}>
+          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="新建分类" />
+          <Button size="icon" type="submit" disabled={creating || !name.trim()} title="添加分类">
+            <Plus />
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RecordList({ records, activeId, query, onQueryChange, onSelect, onCreate, categoryName }) {
+  return (
+    <Card className="min-h-0">
+      <CardHeader>
+        <SectionHeader
+          eyebrow="记录"
+          title={categoryName}
+          action={
+            <Button onClick={onCreate}>
+              <Plus />
+              新建
+            </Button>
+          }
+        />
+      </CardHeader>
+      <CardContent>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input className="pl-9" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索标题、内容、URL 或标签" />
+        </div>
+        <div className="scroll-list mt-4 grid gap-3">
+          {records.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+              暂无记录
+            </div>
+          ) : (
+            records.map((record) => (
+              <button
+                type="button"
+                key={record.id}
+                className={`rounded-lg border bg-card p-4 text-left transition hover:border-primary/60 hover:shadow-sm ${activeId === record.id ? 'border-primary shadow-sm' : ''}`}
+                onClick={() => onSelect(record)}
+              >
+                <div className="flex items-center gap-2">
+                  {record.sourceType === 'web' ? <Globe className="h-4 w-4 text-primary" /> : <FileText className="h-4 w-4 text-primary" />}
+                  <strong className="truncate text-sm">{record.title}</strong>
+                </div>
+                <p className="two-line mt-2 text-sm text-muted-foreground">
+                  {record.summary || record.markdown || record.content || '无摘要'}
+                </p>
+                <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>优先级 {record.priority || 3}</span>
+                  <span>{formatDate(record.updatedAt)}</span>
+                </div>
+                {record.tags?.length ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {record.tags.slice(0, 4).map((tag) => (
+                      <Badge key={tag} variant="outline">{tag}</Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </button>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ShareDialog({ open, record, onClose, onChanged, setMessage, setError }) {
+  const [password, setPassword] = useState('');
+  const [sharesList, setSharesList] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [createdUrl, setCreatedUrl] = useState('');
+
+  useEffect(() => {
+    if (!open || !record?.id) return;
+    setPassword('');
+    setCreatedUrl('');
+    setLoading(true);
+    api(`/api/records/${record.id}/shares`)
+      .then(setSharesList)
+      .catch((error) => setError(error.message))
+      .finally(() => setLoading(false));
+  }, [open, record?.id, setError]);
+
+  function shareUrl(token) {
+    return `${window.location.origin}/share/${token}`;
+  }
+
+  async function createShare() {
+    if (!record?.id) return;
+    setLoading(true);
+    setError('');
+    try {
+      const share = await api(`/api/records/${record.id}/shares`, {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+      });
+      const url = shareUrl(share.token);
+      setSharesList((current) => [share, ...current]);
+      setCreatedUrl(url);
+      setPassword('');
+      await navigator.clipboard?.writeText(url).catch(() => null);
+      await onChanged?.();
+      setMessage('分享链接已生成');
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteShare(token) {
+    setLoading(true);
+    setError('');
+    try {
+      await api(`/api/shares/${token}`, { method: 'DELETE' });
+      setSharesList((current) => current.filter((share) => share.token !== token));
+      await onChanged?.();
+      setMessage('分享链接已删除');
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>分享记录</DialogTitle>
+          <DialogDescription>{record?.title || '当前记录'}</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <Field label="分享密码">
+            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="留空则无需密码" />
+          </Field>
+          {createdUrl ? (
+            <Alert variant="success">
+              <AlertDescription>分享链接：{createdUrl}</AlertDescription>
+            </Alert>
+          ) : null}
+          <Separator />
+          <div className="grid gap-2">
+            <h3 className="text-sm font-medium">已有分享</h3>
+            {sharesList.length === 0 ? (
+              <p className="text-sm text-muted-foreground">暂无分享链接。</p>
+            ) : (
+              sharesList.map((share) => (
+                <div key={share.token} className="grid grid-cols-[1fr_auto] gap-2 rounded-md border p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm">{shareUrl(share.token)}</p>
+                    <p className="text-xs text-muted-foreground">{share.hasPassword ? '需要密码' : '无需密码'}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => navigator.clipboard?.writeText(shareUrl(share.token))}>
+                      <Copy />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => deleteShare(share.token)}>
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>关闭</Button>
+          <Button disabled={loading || !record?.id} onClick={createShare}>
+            {loading ? <Loader2 className="spin" /> : <Share2 />}
+            生成分享链接
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RecordEditor({
+  form,
+  categories,
+  aiConfigs,
+  saving,
+  actionLoading,
+  onChange,
+  onSave,
+  onDelete,
+  onReset,
+  onOrganize,
+  onUploadImage,
+  onShare,
+}) {
+  const [aiConfigId, setAiConfigId] = useState('');
+
+  function updateField(field, value) {
+    onChange({ ...form, [field]: value });
+  }
+
+  function removeImage(url) {
+    onChange({ ...form, imageUrls: form.imageUrls.filter((item) => item !== url) });
+  }
+
+  return (
+    <Card className="editor-panel min-h-0">
+      <CardHeader>
+        <SectionHeader
+          eyebrow={form.id ? '编辑' : '新建'}
+          title={form.id ? form.title || '未命名记录' : '新记录'}
+          action={
+            <div className="flex gap-1">
+              <Button variant="ghost" size="icon" onClick={onReset} title="重置">
+                <Edit3 />
+              </Button>
+              {form.id ? (
+                <Button variant="ghost" size="icon" onClick={onShare} title="分享">
+                  <Share2 />
+                </Button>
+              ) : null}
+              {form.id ? (
+                <Button variant="ghost" size="icon" onClick={onDelete} title="删除">
+                  <Trash2 />
+                </Button>
+              ) : null}
+            </div>
+          }
+        />
+      </CardHeader>
+      <CardContent>
+        <form className="grid gap-4" onSubmit={onSave}>
+          <div className="form-grid two">
+            <Field label="标题">
+              <Input value={form.title} onChange={(event) => updateField('title', event.target.value)} placeholder="记录标题" />
+            </Field>
+            <Field label="分类">
+              <Select value={form.categoryId || 'none'} onValueChange={(value) => updateField('categoryId', value === 'none' ? '' : value)}>
+                <SelectTrigger><SelectValue placeholder="选择分类" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">选择分类</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <div className="form-grid three">
+            <Field label="优先级">
+              <Select value={String(form.priority)} onValueChange={(value) => updateField('priority', Number(value))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5 最高</SelectItem>
+                  <SelectItem value="4">4 较高</SelectItem>
+                  <SelectItem value="3">3 普通</SelectItem>
+                  <SelectItem value="2">2 较低</SelectItem>
+                  <SelectItem value="1">1 最低</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="来源">
+              <Select value={form.sourceType} onValueChange={(value) => updateField('sourceType', value)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">手动记录</SelectItem>
+                  <SelectItem value="web">网页记录</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="标签">
+              <Input value={form.tags} onChange={(event) => updateField('tags', event.target.value)} placeholder="逗号分隔" />
+            </Field>
+          </div>
+          <Field label="URL">
+            <Input value={form.url} onChange={(event) => updateField('url', event.target.value)} placeholder="网页来源地址，可选" />
+          </Field>
+          <Field label="摘要">
+            <Input value={form.summary} onChange={(event) => updateField('summary', event.target.value)} placeholder="一句话摘要" />
+          </Field>
+          <Field label="原始内容">
+            <Textarea value={form.content} onChange={(event) => updateField('content', event.target.value)} rows={5} />
+          </Field>
+          <Field label="Markdown">
+            <Textarea className="mono min-h-64" value={form.markdown} onChange={(event) => updateField('markdown', event.target.value)} rows={10} />
+          </Field>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" variant="outline" asChild>
+              <label>
+                <ImagePlus />
+                上传图片
+                <input hidden type="file" accept="image/*" onChange={(event) => onUploadImage(event.target.files?.[0])} />
+              </label>
+            </Button>
+            <span className="text-sm text-muted-foreground">图片上传公共图床后写入当前记录</span>
+          </div>
+          {form.imageUrls.length ? (
+            <div className="grid gap-2">
+              {form.imageUrls.map((url) => (
+                <div key={url} className="grid grid-cols-[1fr_auto] gap-2 rounded-md border p-2">
+                  <span className="truncate text-sm">{url}</span>
+                  <Button type="button" size="icon" variant="ghost" onClick={() => removeImage(url)}>
+                    <X />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-2">
+            <div className="w-56">
+              <Select value={aiConfigId || 'default'} onValueChange={(value) => setAiConfigId(value === 'default' ? '' : value)}>
+                <SelectTrigger><SelectValue placeholder="AI 配置" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">默认 AI 配置</SelectItem>
+                  {aiConfigs.map((config) => (
+                    <SelectItem key={config.id} value={config.id}>{config.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="button" variant="outline" disabled={!form.id || actionLoading} onClick={() => onOrganize(aiConfigId)}>
+              {actionLoading ? <Loader2 className="spin" /> : <Sparkles />}
+              AI 整理
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? <Loader2 className="spin" /> : <Save />}
+              保存记录
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function WebCaptureView({ categories, aiConfigs, onJobCreated, setMessage, setError }) {
+  const [form, setForm] = useState({ url: '', categoryId: categories[0]?.id || '', priority: 3, aiConfigId: '' });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!form.categoryId && categories[0]) setForm((current) => ({ ...current, categoryId: categories[0].id }));
+  }, [categories, form.categoryId]);
+
+  async function submit(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      const result = await api('/api/records/webpage', { method: 'POST', body: JSON.stringify(form) });
+      await onJobCreated?.(result.job);
+      setForm((current) => ({ ...current, url: '' }));
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl">
+      <Card>
+        <CardHeader>
+          <SectionHeader eyebrow="网页" title="记录网页内容" description="提取正文，使用 AI 总结成 Markdown 并生成标签" action={<Globe className="h-5 w-5 text-primary" />} />
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-4" onSubmit={submit}>
+            <Field label="网页 URL">
+              <Input value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} placeholder="https://example.com/article" />
+            </Field>
+            <div className="form-grid three">
+              <Field label="分类">
+                <Select value={form.categoryId || 'none'} onValueChange={(value) => setForm({ ...form, categoryId: value === 'none' ? '' : value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">选择分类</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="优先级">
+                <Select value={String(form.priority)} onValueChange={(value) => setForm({ ...form, priority: Number(value) })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 最高</SelectItem>
+                    <SelectItem value="4">4 较高</SelectItem>
+                    <SelectItem value="3">3 普通</SelectItem>
+                    <SelectItem value="2">2 较低</SelectItem>
+                    <SelectItem value="1">1 最低</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="AI 配置">
+                <Select value={form.aiConfigId || 'default'} onValueChange={(value) => setForm({ ...form, aiConfigId: value === 'default' ? '' : value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">默认配置</SelectItem>
+                    {aiConfigs.map((config) => (
+                      <SelectItem key={config.id} value={config.id}>{config.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+            <Button type="submit" disabled={loading} className="justify-self-start">
+              {loading ? <Loader2 className="spin" /> : <Sparkles />}
+              提取总结并保存
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function AiConfigView({ aiConfigs, onReload, setMessage, setError }) {
+  const [form, setForm] = useState(emptyAiConfig);
+  const [saving, setSaving] = useState(false);
+
+  function reset() {
+    setForm(emptyAiConfig);
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await api(form.id ? `/api/ai-configs/${form.id}` : '/api/ai-configs', {
+        method: form.id ? 'PUT' : 'POST',
+        body: JSON.stringify(form),
+      });
+      await onReload();
+      reset();
+      setMessage('AI 配置已保存');
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    if (!form.id || !window.confirm('确认删除这个 AI 配置？')) return;
+    setSaving(true);
+    try {
+      await api(`/api/ai-configs/${form.id}`, { method: 'DELETE' });
+      await onReload();
+      reset();
+      setMessage('AI 配置已删除');
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="settings-layout">
+      <Card>
+        <CardHeader>
+          <SectionHeader eyebrow="AI" title="模型配置" action={<Button size="icon" variant="outline" onClick={reset}><Plus /></Button>} />
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-1">
+            {aiConfigs.map((config) => (
+              <button
+                type="button"
+                key={config.id}
+                className={`rounded-md px-3 py-2 text-left text-sm transition hover:bg-accent ${form.id === config.id ? 'bg-accent' : ''}`}
+                onClick={() => setForm(normalizeAiConfig(config))}
+              >
+                <div className="font-medium">{config.name}</div>
+                <div className="text-xs text-muted-foreground">{config.model}{config.isDefault ? ' · 默认' : ''}</div>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <SectionHeader eyebrow={form.id ? '编辑' : '新建'} title="AI 配置" action={<Bot className="h-5 w-5 text-primary" />} />
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-4" onSubmit={save}>
+            <div className="form-grid two">
+              <Field label="名称"><Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
+              <Field label="提供商"><Input value={form.provider} onChange={(event) => setForm({ ...form, provider: event.target.value })} /></Field>
+            </div>
+            <Field label="Base URL"><Input value={form.baseUrl} onChange={(event) => setForm({ ...form, baseUrl: event.target.value })} placeholder="https://api.openai.com/v1" /></Field>
+            <div className="form-grid two">
+              <Field label="模型名"><Input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} /></Field>
+              <Field label="API Key"><Input type="password" value={form.apiKey} onChange={(event) => setForm({ ...form, apiKey: event.target.value })} placeholder={form.hasApiKey ? '已保存，留空不修改' : 'sk-...'} /></Field>
+            </div>
+            <div className="form-grid three">
+              <Field label="温度"><Input value={form.temperature} onChange={(event) => setForm({ ...form, temperature: event.target.value })} /></Field>
+              <Field label="最大 Token"><Input value={form.maxTokens} onChange={(event) => setForm({ ...form, maxTokens: event.target.value })} /></Field>
+              <label className="flex items-center gap-2 self-end rounded-md border px-3 py-2 text-sm">
+                <Checkbox checked={form.isDefault} onCheckedChange={(checked) => setForm({ ...form, isDefault: Boolean(checked) })} />
+                默认配置
+              </label>
+            </div>
+            <div className="flex justify-end gap-2">
+              {form.id ? <Button type="button" variant="destructive" onClick={remove}><Trash2 />删除</Button> : null}
+              <Button type="submit" disabled={saving}>{saving ? <Loader2 className="spin" /> : <Save />}保存配置</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ContactsView({ contacts, onReload, setMessage, setError }) {
+  const [form, setForm] = useState(emptyContact);
+  const [saving, setSaving] = useState(false);
+  const groups = useMemo(() => Array.from(new Set(contacts.map((contact) => contact.group).filter(Boolean))).sort(), [contacts]);
+
+  function reset() {
+    setForm(emptyContact);
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await api(form.id ? `/api/contacts/${form.id}` : '/api/contacts', {
+        method: form.id ? 'PUT' : 'POST',
+        body: JSON.stringify(form),
+      });
+      await onReload();
+      reset();
+      setMessage('联系人已保存');
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    if (!form.id || !window.confirm('确认删除这个联系人？')) return;
+    setSaving(true);
+    try {
+      await api(`/api/contacts/${form.id}`, { method: 'DELETE' });
+      await onReload();
+      reset();
+      setMessage('联系人已删除');
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function testBark() {
+    setSaving(true);
+    setError('');
+    try {
+      await api('/api/notifications/bark', {
+        method: 'POST',
+        body: JSON.stringify({
+          contactIds: form.id ? [form.id] : [],
+          group: form.id ? '' : form.group,
+          title: 'RE Save 测试通知',
+          body: '这是一条 Bark 测试通知。',
+        }),
+      });
+      setMessage('Bark 通知已发送');
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="settings-layout">
+      <Card>
+        <CardHeader><SectionHeader eyebrow="联系人" title="邮件与 Bark" action={<Button size="icon" variant="outline" onClick={reset}><Plus /></Button>} /></CardHeader>
+        <CardContent>
+          <div className="grid gap-1">
+            {contacts.map((contact) => (
+              <button type="button" key={contact.id} className={`rounded-md px-3 py-2 text-left text-sm transition hover:bg-accent ${form.id === contact.id ? 'bg-accent' : ''}`} onClick={() => setForm(normalizeContact(contact))}>
+                <div className="font-medium">{contact.name || contact.email || contact.barkToken}</div>
+                <div className="text-xs text-muted-foreground">{contact.group || '未分组'}{contact.active ? '' : ' · 停用'}</div>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><SectionHeader eyebrow={form.id ? '编辑' : '新建'} title="通知用户" action={<Users className="h-5 w-5 text-primary" />} /></CardHeader>
+        <CardContent>
+          <form className="grid gap-4" onSubmit={save}>
+            <div className="form-grid two">
+              <Field label="名称"><Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
+              <Field label="分组"><Input value={form.group} onChange={(event) => setForm({ ...form, group: event.target.value })} placeholder={groups[0] || '团队 / 家庭 / 项目'} /></Field>
+            </div>
+            <Field label="邮箱地址"><Input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
+            <div className="form-grid two">
+              <Field label="Bark 地址"><Input value={form.barkBaseUrl} onChange={(event) => setForm({ ...form, barkBaseUrl: event.target.value })} /></Field>
+              <Field label="Bark Token"><Input value={form.barkToken} onChange={(event) => setForm({ ...form, barkToken: event.target.value })} /></Field>
+            </div>
+            <label className="flex items-center gap-2 text-sm"><Checkbox checked={form.active} onCheckedChange={(checked) => setForm({ ...form, active: Boolean(checked) })} />启用这个联系人</label>
+            <div className="flex flex-wrap justify-end gap-2">
+              {form.id ? <Button type="button" variant="destructive" onClick={remove}><Trash2 />删除</Button> : null}
+              <Button type="button" variant="outline" disabled={saving || (!form.id && !form.group)} onClick={testBark}><Bell />测试 Bark</Button>
+              <Button type="submit" disabled={saving}>{saving ? <Loader2 className="spin" /> : <Save />}保存联系人</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function DigestView({ categories, aiConfigs, contacts, setMessage, setError, onJobCreated }) {
+  const [form, setForm] = useState({ date: todayText(), categoryId: '', aiConfigId: '', group: '', emails: '', notifyBark: true });
+  const [loading, setLoading] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const groups = useMemo(() => Array.from(new Set(contacts.map((contact) => contact.group).filter(Boolean))).sort(), [contacts]);
+
+  async function previewDigest(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const digest = await api('/api/digest/preview', { method: 'POST', body: JSON.stringify(form) });
+      setPreview(digest);
+      setMessage('日报已生成预览');
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendDigest() {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await api('/api/digest/send', { method: 'POST', body: JSON.stringify(form) });
+      await onJobCreated?.(result.job);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="digest-layout">
+      <Card>
+        <CardHeader><SectionHeader eyebrow="日报" title="整理并发送" action={<Mail className="h-5 w-5 text-primary" />} /></CardHeader>
+        <CardContent>
+          <form className="grid gap-4" onSubmit={previewDigest}>
+            <div className="form-grid two">
+              <Field label="日期"><Input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></Field>
+              <Field label="记录分类">
+                <Select value={form.categoryId || 'all'} onValueChange={(value) => setForm({ ...form, categoryId: value === 'all' ? '' : value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部分类</SelectItem>
+                    {categories.map((category) => <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+            <div className="form-grid two">
+              <Field label="收件分组"><Input value={form.group} onChange={(event) => setForm({ ...form, group: event.target.value })} placeholder={groups[0] || '留空发送给全部联系人'} /></Field>
+              <Field label="AI 配置">
+                <Select value={form.aiConfigId || 'default'} onValueChange={(value) => setForm({ ...form, aiConfigId: value === 'default' ? '' : value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">默认配置或本地整理</SelectItem>
+                    {aiConfigs.map((config) => <SelectItem key={config.id} value={config.id}>{config.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+            <Field label="手动追加邮箱"><Input value={form.emails} onChange={(event) => setForm({ ...form, emails: event.target.value })} placeholder="多个邮箱用逗号分隔" /></Field>
+            <label className="flex items-center gap-2 text-sm"><Checkbox checked={form.notifyBark} onCheckedChange={(checked) => setForm({ ...form, notifyBark: Boolean(checked) })} />同时发送 Bark 通知</label>
+            <div className="flex justify-end gap-2">
+              <Button type="submit" variant="outline" disabled={loading}>{loading ? <Loader2 className="spin" /> : <FileText />}生成预览</Button>
+              <Button type="button" disabled={loading} onClick={sendDigest}><Send />发送邮件</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><SectionHeader eyebrow="预览" title={preview?.subject || '邮件内容'} /></CardHeader>
+        <CardContent>
+          <div className="markdown-preview min-h-[520px] rounded-md border bg-background p-4 text-sm">
+            {preview?.markdown || '生成预览后会显示 Markdown 日报。'}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ShareManageView({ sharesList, onReload, setMessage, setError }) {
+  const [loading, setLoading] = useState(false);
+
+  function shareUrl(token) {
+    return `${window.location.origin}/share/${token}`;
+  }
+
+  async function copyShare(token) {
+    await navigator.clipboard?.writeText(shareUrl(token)).catch(() => null);
+    setMessage('分享链接已复制');
+  }
+
+  async function deleteShare(token) {
+    if (!window.confirm('确认删除这个分享链接？')) return;
+    setLoading(true);
+    setError('');
+    try {
+      await api(`/api/shares/${token}`, { method: 'DELETE' });
+      await onReload();
+      setMessage('分享链接已删除');
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <SectionHeader eyebrow="分享" title="分享管理" action={<Button variant="outline" onClick={onReload} disabled={loading}>{loading ? <Loader2 className="spin" /> : <RefreshCw />}刷新</Button>} />
+      </CardHeader>
+      <CardContent>
+        {sharesList.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">暂无分享链接。</div>
+        ) : (
+          <div className="grid gap-3">
+            {sharesList.map((share) => (
+              <div key={share.token} className="grid gap-3 rounded-lg border p-4 md:grid-cols-[1fr_auto] md:items-center">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <strong>{share.title || '未命名记录'}</strong>
+                    <Badge variant={share.hasPassword ? 'default' : 'outline'}>{share.hasPassword ? '有密码' : '无密码'}</Badge>
+                    {share.missingRecord ? <Badge variant="destructive">记录已不存在</Badge> : null}
+                  </div>
+                  <p className="mt-1 truncate text-sm text-muted-foreground">{shareUrl(share.token)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">创建时间：{formatDate(share.createdAt)}{share.recordUrl ? ` · 来源：${share.recordUrl}` : ''}</p>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => copyShare(share.token)}><Copy />复制</Button>
+                  <Button variant="destructive" onClick={() => deleteShare(share.token)}><Trash2 />删除</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PublicSharePage({ token }) {
+  const [meta, setMeta] = useState(null);
+  const [record, setRecord] = useState(null);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    api(`/api/public/shares/${token}/meta`)
+      .then((share) => {
+        setMeta(share);
+        if (!share.hasPassword) {
+          return api(`/api/public/shares/${token}`, { method: 'POST', body: JSON.stringify({ password: '' }) }).then((data) => setRecord(data.record));
+        }
+        return null;
+      })
+      .catch((loadError) => setError(loadError.message))
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  async function unlock(event) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      const data = await api(`/api/public/shares/${token}`, { method: 'POST', body: JSON.stringify({ password }) });
+      setRecord(data.record);
+    } catch (unlockError) {
+      setError(unlockError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-background">
+      <div className="mx-auto max-w-3xl p-6">
+        <div className="mb-5">
+          <h1 className="text-2xl font-semibold">RE Save 分享</h1>
+          <p className="text-sm text-muted-foreground">只读记录内容</p>
+        </div>
+        <div className="grid gap-4">
+          {loading ? <div className="h-1 rounded bg-muted"><div className="h-1 w-1/3 animate-pulse rounded bg-primary" /></div> : null}
+          {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+          {meta?.hasPassword && !record ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{meta.title || '受保护的分享'}</CardTitle>
+                <CardDescription>输入分享密码后查看内容</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form className="grid gap-4" onSubmit={unlock}>
+                  <Field label="分享密码"><Input autoFocus type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
+                  <Button type="submit" disabled={submitting || !password}>{submitting ? <Loader2 className="spin" /> : <KeyRound />}查看内容</Button>
+                </form>
+              </CardContent>
+            </Card>
+          ) : null}
+          {record ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{record.title}</CardTitle>
+                <CardDescription>{record.summary || '分享记录'}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">优先级 {record.priority || 3}</Badge>
+                  {(record.tags || []).map((tag) => <Badge key={tag} variant="outline">{tag}</Badge>)}
+                </div>
+                {record.url ? (
+                  <Button variant="outline" asChild className="justify-self-start">
+                    <a href={record.url} target="_blank" rel="noreferrer"><ExternalLink />打开原网页</a>
+                  </Button>
+                ) : null}
+                <div className="markdown-preview rounded-md border bg-background p-4 text-sm">
+                  {record.markdown || record.content || '没有可展示内容。'}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function App() {
+  const shareMatch = window.location.pathname.match(/^\/share\/([^/]+)$/);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [view, setView] = useState('records');
+  const [categories, setCategories] = useState([]);
+  const [records, setRecords] = useState([]);
+  const [aiConfigs, setAiConfigs] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [sharesList, setSharesList] = useState([]);
+  const [activeCategoryId, setActiveCategoryId] = useState('');
+  const [query, setQuery] = useState('');
+  const [recordForm, setRecordForm] = useState(emptyRecord);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+
+  if (shareMatch) return <PublicSharePage token={decodeURIComponent(shareMatch[1])} />;
+
+  const activeCategoryName = useMemo(() => {
+    if (!activeCategoryId) return '全部内容';
+    return categories.find((category) => category.id === activeCategoryId)?.name || '当前分类';
+  }, [activeCategoryId, categories]);
+
+  const recordCounts = useMemo(() => records.reduce((counts, record) => {
+    counts[record.categoryId] = (counts[record.categoryId] || 0) + 1;
+    return counts;
+  }, {}), [records]);
+
+  const filteredRecords = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return records.filter((record) => {
+      if (activeCategoryId && record.categoryId !== activeCategoryId) return false;
+      if (!normalizedQuery) return true;
+      const haystack = [record.title, record.summary, record.content, record.markdown, record.url, record.sourceType, ...(record.tags || [])].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [activeCategoryId, query, records]);
+
+  async function loadCoreData() {
+    setLoading(true);
+    setError('');
+    try {
+      const [nextCategories, nextRecords, nextAiConfigs, nextContacts, nextShares] = await Promise.all([
+        api('/api/categories'),
+        api('/api/records'),
+        api('/api/ai-configs'),
+        api('/api/contacts'),
+        api('/api/shares'),
+      ]);
+      setCategories(nextCategories);
+      setRecords(nextRecords);
+      setAiConfigs(nextAiConfigs);
+      setContacts(nextContacts);
+      setSharesList(nextShares);
+      if (!recordForm.categoryId && nextCategories[0]) {
+        setRecordForm((current) => ({ ...current, categoryId: nextCategories[0].id }));
+      }
+    } catch (loadError) {
+      setError(loadError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function reloadAiConfigs() { setAiConfigs(await api('/api/ai-configs')); }
+  async function reloadContacts() { setContacts(await api('/api/contacts')); }
+  async function reloadShares() { setSharesList(await api('/api/shares')); }
+
+  async function runJobsOnce() {
+    await api('/api/jobs/run', {
+      method: 'POST',
+      body: JSON.stringify({ limit: 2 }),
+    }).catch(() => null);
+  }
+
+  async function trackJob(job, options = {}) {
+    if (!job?.id) return;
+    setMessage(`${options.label || '任务'}已加入队列`);
+    runJobsOnce();
+
+    const startedAt = Date.now();
+    const timer = window.setInterval(async () => {
+      try {
+        const current = await api(`/api/jobs/${job.id}`);
+        if (current.status === 'success') {
+          window.clearInterval(timer);
+          if (options.onSuccess) {
+            await options.onSuccess(current);
+          }
+          setMessage(`${options.label || '任务'}已完成`);
+        } else if (current.status === 'failed') {
+          window.clearInterval(timer);
+          setError(current.error || `${options.label || '任务'}执行失败`);
+        } else if (Date.now() - startedAt > 10 * 60 * 1000) {
+          window.clearInterval(timer);
+          setMessage(`${options.label || '任务'}仍在后台处理中，可稍后刷新查看`);
+        }
+      } catch (jobError) {
+        window.clearInterval(timer);
+        setError(jobError.message);
+      }
+    }, 3000);
+  }
+
+  useEffect(() => {
+    api('/api/session')
+      .then((session) => setAuthenticated(session.authenticated))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setCheckingSession(false));
+  }, []);
+
+  useEffect(() => {
+    if (authenticated) loadCoreData();
+  }, [authenticated]);
+
+  async function createCategory(name) {
+    const trimmed = name.trim();
+    if (!trimmed) return false;
+    setCreatingCategory(true);
+    setError('');
+    try {
+      const category = await api('/api/categories', { method: 'POST', body: JSON.stringify({ name: trimmed }) });
+      setCategories((current) => {
+        const exists = current.some((item) => item.id === category.id);
+        return exists ? current : [...current, category].sort((a, b) => a.name.localeCompare(b.name));
+      });
+      setActiveCategoryId(category.id);
+      setRecordForm((current) => ({ ...current, categoryId: category.id }));
+      setMessage('分类已创建');
+      return true;
+    } catch (createError) {
+      setError(createError.message);
+      return false;
+    } finally {
+      setCreatingCategory(false);
+    }
+  }
+
+  function resetRecordForm(categoryId = activeCategoryId) {
+    setRecordForm({ ...emptyRecord, categoryId: categoryId || categories[0]?.id || '' });
+  }
+
+  async function saveRecord(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const saved = await api(recordForm.id ? `/api/records/${recordForm.id}` : '/api/records', {
+        method: recordForm.id ? 'PUT' : 'POST',
+        body: JSON.stringify(recordForm),
+      });
+      setRecords((current) => {
+        const exists = current.some((record) => record.id === saved.id);
+        return exists ? current.map((record) => (record.id === saved.id ? saved : record)) : [saved, ...current];
+      });
+      setRecordForm(normalizeRecord(saved));
+      setMessage('记录已保存');
+    } catch (saveError) {
+      setError(saveError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteRecord() {
+    if (!recordForm.id || !window.confirm('确认删除这条记录？')) return;
+    setSaving(true);
+    setError('');
+    try {
+      await api(`/api/records/${recordForm.id}`, { method: 'DELETE' });
+      setRecords((current) => current.filter((record) => record.id !== recordForm.id));
+      resetRecordForm();
+      setMessage('记录已删除');
+    } catch (deleteError) {
+      setError(deleteError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function organizeRecord(aiConfigId) {
+    if (!recordForm.id) return;
+    setActionLoading(true);
+    setError('');
+    try {
+      const result = await api(`/api/records/${recordForm.id}/organize`, {
+        method: 'POST',
+        body: JSON.stringify({ aiConfigId }),
+      });
+      await trackJob(result.job, {
+        label: 'AI 整理',
+        onSuccess: async (job) => {
+          const organized = job.result?.record;
+          if (organized) {
+            setRecords((current) => current.map((record) => (record.id === organized.id ? organized : record)));
+            setRecordForm(normalizeRecord(organized));
+          } else {
+            await loadCoreData();
+          }
+        },
+      });
+    } catch (organizeError) {
+      setError(organizeError.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function uploadImage(file) {
+    if (!file) return;
+    setActionLoading(true);
+    setError('');
+    try {
+      const body = new FormData();
+      body.append('image', file);
+      const result = await api('/api/images', { method: 'POST', body });
+      setRecordForm((current) => ({
+        ...current,
+        imageUrls: [...current.imageUrls, result.url],
+        markdown: `${current.markdown || ''}\n\n![image](${result.url})`.trim(),
+      }));
+      setMessage('图片已上传');
+    } catch (uploadError) {
+      setError(uploadError.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function logout() {
+    await api('/api/logout', { method: 'POST' }).catch(() => null);
+    setAuthenticated(false);
+    setRecords([]);
+    setCategories([]);
+    setAiConfigs([]);
+    setContacts([]);
+    setSharesList([]);
+    setRecordForm(emptyRecord);
+  }
+
+  if (checkingSession) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <Loader2 className="spin h-6 w-6 text-primary" />
+      </main>
+    );
+  }
+
+  if (!authenticated) return <Login onLogin={() => setAuthenticated(true)} />;
+
+  const navItems = [
+    { id: 'records', label: '记录', icon: FileText },
+    { id: 'web', label: '网页', icon: Globe },
+    { id: 'ai', label: 'AI 配置', icon: Bot },
+    { id: 'contacts', label: '通知', icon: Users },
+    { id: 'shares', label: '分享', icon: Share2 },
+    { id: 'digest', label: '日报', icon: Mail },
+  ];
+
+  return (
+    <main className="min-h-screen bg-background">
+      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+        <div className="mx-auto flex max-w-[1560px] items-center gap-4 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-semibold">RE Save</h1>
+            <p className="truncate text-xs text-muted-foreground">记录、网页提取、AI 整理与通知发送</p>
+          </div>
+          <Tabs value={view} onValueChange={setView} className="min-w-0">
+            <TabsList className="max-w-[720px] overflow-x-auto">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <TabsTrigger key={item.id} value={item.id} className="gap-2">
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+          </Tabs>
+          <div className="flex gap-1">
+            <Button variant="ghost" size="icon" onClick={loadCoreData} title="刷新">
+              <RefreshCw className={loading ? 'spin' : ''} />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={logout} title="退出登录">
+              <LogOut />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto grid max-w-[1560px] gap-4 px-4 py-4">
+        {message ? (
+          <Alert variant="success">
+            <AlertDescription className="flex items-center justify-between gap-3">
+              <span>{message}</span>
+              <button type="button" onClick={() => setMessage('')}><X className="h-4 w-4" /></button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {error ? (
+          <Alert variant="destructive">
+            <AlertDescription className="flex items-center justify-between gap-3">
+              <span>{error}</span>
+              <button type="button" onClick={() => setError('')}><X className="h-4 w-4" /></button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {view === 'records' ? (
+          <div className="records-layout">
+            <CategoryPanel
+              categories={categories}
+              activeCategoryId={activeCategoryId}
+              recordCounts={recordCounts}
+              creating={creatingCategory}
+              onCreate={createCategory}
+              onSelect={(categoryId) => {
+                setActiveCategoryId(categoryId);
+                resetRecordForm(categoryId);
+              }}
+            />
+            <RecordList
+              records={filteredRecords}
+              activeId={recordForm.id}
+              query={query}
+              onQueryChange={setQuery}
+              categoryName={activeCategoryName}
+              onSelect={(record) => setRecordForm(normalizeRecord(record))}
+              onCreate={() => resetRecordForm()}
+            />
+            <RecordEditor
+              form={recordForm}
+              categories={categories}
+              aiConfigs={aiConfigs}
+              saving={saving}
+              actionLoading={actionLoading}
+              onChange={setRecordForm}
+              onSave={saveRecord}
+              onDelete={deleteRecord}
+              onReset={() => resetRecordForm()}
+              onOrganize={organizeRecord}
+              onUploadImage={uploadImage}
+              onShare={() => setShareDialogOpen(true)}
+            />
+          </div>
+        ) : null}
+
+        {view === 'web' ? (
+          <WebCaptureView
+            categories={categories}
+            aiConfigs={aiConfigs}
+            setMessage={setMessage}
+            setError={setError}
+            onJobCreated={(job) =>
+              trackJob(job, {
+                label: '网页提取',
+                onSuccess: async (doneJob) => {
+                  const record = doneJob.result?.record;
+                  if (record) {
+                    setRecords((current) => [record, ...current]);
+                    setRecordForm(normalizeRecord(record));
+                    setView('records');
+                  } else {
+                    await loadCoreData();
+                  }
+                },
+              })
+            }
+          />
+        ) : null}
+
+        {view === 'ai' ? <AiConfigView aiConfigs={aiConfigs} onReload={reloadAiConfigs} setMessage={setMessage} setError={setError} /> : null}
+        {view === 'contacts' ? <ContactsView contacts={contacts} onReload={reloadContacts} setMessage={setMessage} setError={setError} /> : null}
+        {view === 'shares' ? <ShareManageView sharesList={sharesList} onReload={reloadShares} setMessage={setMessage} setError={setError} /> : null}
+        {view === 'digest' ? (
+          <DigestView
+            categories={categories}
+            aiConfigs={aiConfigs}
+            contacts={contacts}
+            setMessage={setMessage}
+            setError={setError}
+            onJobCreated={(job) =>
+              trackJob(job, {
+                label: '日报发送',
+                onSuccess: async (doneJob) => {
+                  setMessage(
+                    `日报已发送，邮箱收件人 ${doneJob.result?.sent?.email?.recipients?.length || 0} 个`,
+                  );
+                },
+              })
+            }
+          />
+        ) : null}
+      </div>
+
+      <ShareDialog
+        open={shareDialogOpen}
+        record={recordForm}
+        onClose={() => setShareDialogOpen(false)}
+        onChanged={reloadShares}
+        setMessage={setMessage}
+        setError={setError}
+      />
+    </main>
+  );
+}
+
+createRoot(document.getElementById('root')).render(<App />);
