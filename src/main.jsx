@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Bell,
   Bot,
@@ -111,7 +113,14 @@ function toTagText(tags) {
 }
 
 function normalizeRecord(record) {
-  return { ...emptyRecord, ...record, tags: toTagText(record.tags), imageUrls: record.imageUrls || [] };
+  return {
+    ...emptyRecord,
+    ...record,
+    markdown: record.markdown || record.content || '',
+    content: record.content || '',
+    tags: toTagText(record.tags),
+    imageUrls: record.imageUrls || [],
+  };
 }
 
 function normalizeAiConfig(config) {
@@ -160,6 +169,36 @@ function SectionHeader({ eyebrow, title, description, action }) {
         {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
       </div>
       {action}
+    </div>
+  );
+}
+
+const markdownComponents = {
+  a: ({ node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
+  img: ({ node, alt, ...props }) => <img {...props} alt={alt || ''} loading="lazy" />,
+  table: ({ node, ...props }) => (
+    <div className="markdown-table-wrap">
+      <table {...props} />
+    </div>
+  ),
+};
+
+function MarkdownContent({ source, fallback = '没有可展示内容。', className = '' }) {
+  const markdown = String(source || '').trim();
+
+  if (!markdown) {
+    return (
+      <div className={`markdown-body markdown-body-empty ${className}`}>
+        <p>{fallback}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`markdown-body ${className}`}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+        {markdown}
+      </ReactMarkdown>
     </div>
   );
 }
@@ -457,6 +496,7 @@ function RecordEditor({
   onShare,
 }) {
   const [aiConfigId, setAiConfigId] = useState('');
+  const contentMarkdown = form.markdown;
 
   function updateField(field, value) {
     onChange({ ...form, [field]: value });
@@ -541,12 +581,21 @@ function RecordEditor({
           <Field label="摘要">
             <Input value={form.summary} onChange={(event) => updateField('summary', event.target.value)} placeholder="一句话摘要" />
           </Field>
-          <Field label="原始内容">
-            <Textarea value={form.content} onChange={(event) => updateField('content', event.target.value)} rows={5} />
-          </Field>
-          <Field label="Markdown">
-            <Textarea className="mono min-h-64" value={form.markdown} onChange={(event) => updateField('markdown', event.target.value)} rows={10} />
-          </Field>
+          <div className="markdown-workspace">
+            <Field label="内容">
+              <Textarea
+                className="mono markdown-editor-input"
+                value={contentMarkdown}
+                onChange={(event) => updateField('markdown', event.target.value)}
+                rows={16}
+                placeholder="# 标题&#10;&#10;- 要点&#10;- 链接、图片和表格都按 Markdown 写"
+              />
+            </Field>
+            <div className="markdown-live-panel">
+              <Label>预览</Label>
+              <MarkdownContent source={contentMarkdown} fallback="开始编写后会显示预览。" />
+            </div>
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button type="button" variant="outline" asChild>
               <label>
@@ -957,9 +1006,11 @@ function DigestView({ categories, aiConfigs, contacts, setMessage, setError, onJ
       <Card>
         <CardHeader><SectionHeader eyebrow="预览" title={preview?.subject || '邮件内容'} /></CardHeader>
         <CardContent>
-          <div className="markdown-preview min-h-[520px] rounded-md border bg-background p-4 text-sm">
-            {preview?.markdown || '生成预览后会显示 Markdown 日报。'}
-          </div>
+          <MarkdownContent
+            className="digest-preview"
+            source={preview?.markdown}
+            fallback="生成预览后会显示 Markdown 日报。"
+          />
         </CardContent>
       </Card>
     </div>
@@ -1063,52 +1114,48 @@ function PublicSharePage({ token }) {
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="mx-auto max-w-3xl p-6">
-        <div className="mb-5">
-          <h1 className="text-2xl font-semibold">RE Save 分享</h1>
-          <p className="text-sm text-muted-foreground">只读记录内容</p>
-        </div>
-        <div className="grid gap-4">
-          {loading ? <div className="h-1 rounded bg-muted"><div className="h-1 w-1/3 animate-pulse rounded bg-primary" /></div> : null}
-          {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
-          {meta?.hasPassword && !record ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>{meta.title || '受保护的分享'}</CardTitle>
-                <CardDescription>输入分享密码后查看内容</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form className="grid gap-4" onSubmit={unlock}>
-                  <Field label="分享密码"><Input autoFocus type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
-                  <Button type="submit" disabled={submitting || !password}>{submitting ? <Loader2 className="spin" /> : <KeyRound />}查看内容</Button>
-                </form>
-              </CardContent>
-            </Card>
-          ) : null}
-          {record ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>{record.title}</CardTitle>
-                <CardDescription>{record.summary || '分享记录'}</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">优先级 {record.priority || 3}</Badge>
-                  {(record.tags || []).map((tag) => <Badge key={tag} variant="outline">{tag}</Badge>)}
-                </div>
-                {record.url ? (
-                  <Button variant="outline" asChild className="justify-self-start">
-                    <a href={record.url} target="_blank" rel="noreferrer"><ExternalLink />打开原网页</a>
-                  </Button>
-                ) : null}
-                <div className="markdown-preview rounded-md border bg-background p-4 text-sm">
-                  {record.markdown || record.content || '没有可展示内容。'}
-                </div>
-              </CardContent>
-            </Card>
+    <main className="share-page min-h-screen bg-background">
+      <div className="mx-auto grid w-full max-w-5xl gap-6 px-5 py-6 md:px-8 md:py-10">
+        <div className="share-topbar">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-normal text-primary">RE Save 分享</p>
+            <h1 className="mt-1 truncate text-2xl font-semibold">{record?.title || meta?.title || '分享记录'}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{record?.summary || '只读记录内容'}</p>
+          </div>
+          {record?.url ? (
+            <Button variant="outline" asChild>
+              <a href={record.url} target="_blank" rel="noreferrer"><ExternalLink />打开原网页</a>
+            </Button>
           ) : null}
         </div>
+
+        {loading ? <div className="h-1 rounded bg-muted"><div className="h-1 w-1/3 animate-pulse rounded bg-primary" /></div> : null}
+        {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+
+        {meta?.hasPassword && !record ? (
+          <Card className="mx-auto w-full max-w-md">
+            <CardHeader>
+              <CardTitle>{meta.title || '受保护的分享'}</CardTitle>
+              <CardDescription>输入分享密码后查看内容</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form className="grid gap-4" onSubmit={unlock}>
+                <Field label="分享密码"><Input autoFocus type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
+                <Button type="submit" disabled={submitting || !password}>{submitting ? <Loader2 className="spin" /> : <KeyRound />}查看内容</Button>
+              </form>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {record ? (
+          <article className="share-article">
+            <div className="share-meta-row">
+              <Badge variant="secondary">优先级 {record.priority || 3}</Badge>
+              {(record.tags || []).map((tag) => <Badge key={tag} variant="outline">{tag}</Badge>)}
+            </div>
+            <MarkdownContent source={record.markdown || record.content} />
+          </article>
+        ) : null}
       </div>
     </main>
   );

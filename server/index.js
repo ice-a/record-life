@@ -1048,6 +1048,8 @@ app.post('/api/logout', (req, res) => {
   res.json({ authenticated: false });
 });
 
+app.use('/api', requireReady);
+
 app.get('/api/categories', requireAuth, async (req, res, next) => {
   try {
     const items = await categories().find({}).sort({ name: 1 }).toArray();
@@ -1624,25 +1626,35 @@ let readyPromise;
 
 export async function ensureReady() {
   if (!readyPromise) {
-    readyPromise = ensureDatabase().then(() => {
-      scheduleDailyDigest();
-      scheduleLocalJobRunner();
-    });
+    readyPromise = ensureDatabase()
+      .then(() => {
+        scheduleDailyDigest();
+        scheduleLocalJobRunner();
+      })
+      .catch((error) => {
+        readyPromise = undefined;
+        throw error;
+      });
   }
   return readyPromise;
+}
+
+async function requireReady(req, res, next) {
+  try {
+    await ensureReady();
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
 
 export { app };
 
 if (process.env.VERCEL !== '1') {
-  ensureReady()
-    .then(() => {
-      app.listen(port, () => {
-        console.log(`API server listening on http://127.0.0.1:${port}`);
-      });
-    })
-    .catch((error) => {
-      console.error(error.message);
-      process.exit(1);
+  app.listen(port, () => {
+    console.log(`API server listening on http://127.0.0.1:${port}`);
+    ensureReady().catch((error) => {
+      console.error(`API initialization failed: ${error.message}`);
     });
+  });
 }
