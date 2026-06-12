@@ -34,37 +34,6 @@ export function useKeyboardShortcuts(handlers) {
   }, [handlers]);
 }
 
-export function useAutoSave(callback, deps, delay = 3000) {
-  const timeoutRef = useRef(null);
-  const callbackRef = useRef(callback);
-  const hasChangesRef = useRef(false);
-
-  callbackRef.current = callback;
-
-  const markDirty = useCallback(() => {
-    hasChangesRef.current = true;
-  }, []);
-
-  useEffect(() => {
-    if (!hasChangesRef.current) return;
-
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-
-    timeoutRef.current = setTimeout(() => {
-      if (hasChangesRef.current) {
-        callbackRef.current();
-        hasChangesRef.current = false;
-      }
-    }, delay);
-
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, deps);
-
-  return { markDirty };
-}
-
 export function useTheme() {
   const [theme, setThemeState] = useState(() => {
     if (typeof window === 'undefined') return 'light';

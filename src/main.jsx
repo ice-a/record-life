@@ -1,9 +1,8 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
-  Bell,
   Bot,
   Check,
   Copy,
@@ -17,18 +16,16 @@ import {
   KeyRound,
   Loader2,
   LogOut,
-  Mail,
   Moon,
   Plus,
+  Quote,
   RefreshCw,
   Save,
   Search,
-  Send,
   Share2,
   Sparkles,
   Sun,
   Trash2,
-  Users,
   X,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -86,16 +83,6 @@ const emptyAiConfig = {
   isDefault: false,
 };
 
-const emptyContact = {
-  id: '',
-  name: '',
-  email: '',
-  group: '',
-  barkBaseUrl: 'https://api.day.app',
-  barkToken: '',
-  active: true,
-};
-
 
 
 function toTagText(tags) {
@@ -123,13 +110,7 @@ function normalizeAiConfig(config) {
   };
 }
 
-function normalizeContact(contact) {
-  return { ...emptyContact, ...contact, active: contact.active !== false };
-}
 
-function todayText() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function formatDate(value) {
   if (!value) return '';
@@ -164,9 +145,9 @@ function SectionHeader({ eyebrow, title, description, action }) {
 }
 
 const markdownComponents = {
-  a: ({ node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
-  img: ({ node, alt, ...props }) => <img {...props} alt={alt || ''} loading="lazy" />,
-  table: ({ node, ...props }) => (
+  a: (props) => <a {...props} target="_blank" rel="noreferrer" />,
+  img: ({ alt, ...props }) => <img {...props} alt={alt || ''} loading="lazy" />,
+  table: (props) => (
     <div className="markdown-table-wrap">
       <table {...props} />
     </div>
@@ -402,7 +383,7 @@ function RecordList({ records, activeId, onSelect, onCreate, categoryName }) {
         <div className="scroll-list mt-4 grid gap-3">
           {displayRecords.length === 0 ? (
             <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-              {query ? '没有匹配的记录' : '暂无记录'}
+              {localQuery ? '没有匹配的记录' : '暂无记录'}
             </div>
           ) : (
             displayRecords.map((record) => (
@@ -914,198 +895,6 @@ function AiConfigView({ aiConfigs, onReload, setMessage, setError }) {
   );
 }
 
-function ContactsView({ contacts, onReload, setMessage, setError }) {
-  const [form, setForm] = useState(emptyContact);
-  const [saving, setSaving] = useState(false);
-  const groups = useMemo(() => Array.from(new Set(contacts.map((contact) => contact.group).filter(Boolean))).sort(), [contacts]);
-
-  function reset() {
-    setForm(emptyContact);
-  }
-
-  async function save(event) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      await api(form.id ? `/api/contacts/${form.id}` : '/api/contacts', {
-        method: form.id ? 'PUT' : 'POST',
-        body: JSON.stringify(form),
-      });
-      await onReload();
-      reset();
-      setMessage('联系人已保存');
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function remove() {
-    if (!form.id || !window.confirm('确认删除这个联系人？')) return;
-    setSaving(true);
-    try {
-      await api(`/api/contacts/${form.id}`, { method: 'DELETE' });
-      await onReload();
-      reset();
-      setMessage('联系人已删除');
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function testBark() {
-    setSaving(true);
-    setError('');
-    try {
-      await api('/api/notifications/bark', {
-        method: 'POST',
-        body: JSON.stringify({
-          contactIds: form.id ? [form.id] : [],
-          group: form.id ? '' : form.group,
-          title: 'RE Save 测试通知',
-          body: '这是一条 Bark 测试通知。',
-        }),
-      });
-      setMessage('Bark 通知已发送');
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="settings-layout">
-      <Card>
-        <CardHeader><SectionHeader eyebrow="联系人" title="邮件与 Bark" action={<Button size="icon" variant="outline" onClick={reset}><Plus /></Button>} /></CardHeader>
-        <CardContent>
-          <div className="grid gap-1">
-            {contacts.map((contact) => (
-              <button type="button" key={contact.id} className={`rounded-md px-3 py-2 text-left text-sm transition hover:bg-accent ${form.id === contact.id ? 'bg-accent' : ''}`} onClick={() => setForm(normalizeContact(contact))}>
-                <div className="font-medium">{contact.name || contact.email || contact.barkToken}</div>
-                <div className="text-xs text-muted-foreground">{contact.group || '未分组'}{contact.active ? '' : ' · 停用'}</div>
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader><SectionHeader eyebrow={form.id ? '编辑' : '新建'} title="通知用户" action={<Users className="h-5 w-5 text-primary" />} /></CardHeader>
-        <CardContent>
-          <form className="grid gap-4" onSubmit={save}>
-            <div className="form-grid two">
-              <Field label="名称"><Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
-              <Field label="分组"><Input value={form.group} onChange={(event) => setForm({ ...form, group: event.target.value })} placeholder={groups[0] || '团队 / 家庭 / 项目'} /></Field>
-            </div>
-            <Field label="邮箱地址"><Input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
-            <div className="form-grid two">
-              <Field label="Bark 地址"><Input value={form.barkBaseUrl} onChange={(event) => setForm({ ...form, barkBaseUrl: event.target.value })} /></Field>
-              <Field label="Bark Token"><Input value={form.barkToken} onChange={(event) => setForm({ ...form, barkToken: event.target.value })} /></Field>
-            </div>
-            <label className="flex items-center gap-2 text-sm"><Checkbox checked={form.active} onCheckedChange={(checked) => setForm({ ...form, active: Boolean(checked) })} />启用这个联系人</label>
-            <div className="flex flex-wrap justify-end gap-2">
-              {form.id ? <Button type="button" variant="destructive" onClick={remove}><Trash2 />删除</Button> : null}
-              <Button type="button" variant="outline" disabled={saving || (!form.id && !form.group)} onClick={testBark}><Bell />测试 Bark</Button>
-              <Button type="submit" disabled={saving}>{saving ? <Loader2 className="spin" /> : <Save />}保存联系人</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function DigestView({ categories, aiConfigs, contacts, setMessage, setError, onJobCreated }) {
-  const [form, setForm] = useState({ date: todayText(), categoryId: '', aiConfigId: '', group: '', emails: '', notifyBark: true });
-  const [loading, setLoading] = useState(false);
-  const [preview, setPreview] = useState(null);
-  const groups = useMemo(() => Array.from(new Set(contacts.map((contact) => contact.group).filter(Boolean))).sort(), [contacts]);
-
-  async function previewDigest(event) {
-    event.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const digest = await api('/api/digest/preview', { method: 'POST', body: JSON.stringify(form) });
-      setPreview(digest);
-      setMessage('日报已生成预览');
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function sendDigest() {
-    setLoading(true);
-    setError('');
-    try {
-      const result = await api('/api/digest/send', { method: 'POST', body: JSON.stringify(form) });
-      await onJobCreated?.(result.job);
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="digest-layout">
-      <Card>
-        <CardHeader><SectionHeader eyebrow="日报" title="整理并发送" action={<Mail className="h-5 w-5 text-primary" />} /></CardHeader>
-        <CardContent>
-          <form className="grid gap-4" onSubmit={previewDigest}>
-            <div className="form-grid two">
-              <Field label="日期"><Input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></Field>
-              <Field label="记录分类">
-                <Select value={form.categoryId || 'all'} onValueChange={(value) => setForm({ ...form, categoryId: value === 'all' ? '' : value })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部分类</SelectItem>
-                    {categories.map((category) => <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-            <div className="form-grid two">
-              <Field label="收件分组"><Input value={form.group} onChange={(event) => setForm({ ...form, group: event.target.value })} placeholder={groups[0] || '留空发送给全部联系人'} /></Field>
-              <Field label="AI 配置">
-                <Select value={form.aiConfigId || 'default'} onValueChange={(value) => setForm({ ...form, aiConfigId: value === 'default' ? '' : value })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">默认配置或本地整理</SelectItem>
-                    {aiConfigs.map((config) => <SelectItem key={config.id} value={config.id}>{config.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-            <Field label="手动追加邮箱"><Input value={form.emails} onChange={(event) => setForm({ ...form, emails: event.target.value })} placeholder="多个邮箱用逗号分隔" /></Field>
-            <label className="flex items-center gap-2 text-sm"><Checkbox checked={form.notifyBark} onCheckedChange={(checked) => setForm({ ...form, notifyBark: Boolean(checked) })} />同时发送 Bark 通知</label>
-            <div className="flex justify-end gap-2">
-              <Button type="submit" variant="outline" disabled={loading}>{loading ? <Loader2 className="spin" /> : <FileText />}生成预览</Button>
-              <Button type="button" disabled={loading} onClick={sendDigest}><Send />发送邮件</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader><SectionHeader eyebrow="预览" title={preview?.subject || '邮件内容'} /></CardHeader>
-        <CardContent>
-          <MarkdownContent
-            className="digest-preview"
-            source={preview?.markdown}
-            fallback="生成预览后会显示 Markdown 日报。"
-          />
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 function ShareManageView({ sharesList, onReload, setMessage, setError }) {
   const [loading, setLoading] = useState(false);
 
@@ -1250,6 +1039,46 @@ function PublicSharePage({ token }) {
   );
 }
 
+const hitokotoQuotes = [
+  '生活就像骑自行车，想保持平衡就得往前走。',
+  '每天进步一点点，就是最好的捷径。',
+  '把复杂的事情简单化，你就赢了。',
+  '种一棵树最好的时间是十年前，其次是现在。',
+  '世界上唯一不变的就是变化本身。',
+  '不积跬步，无以至千里。',
+  '你不需要很厉害才能开始，但你需要开始才能很厉害。',
+  '所谓无底深渊，下去也是前程万里。',
+  '万物皆有裂痕，那是光照进来的地方。',
+  '做你自己，因为别人都有人做了。',
+  '与其担心未来，不如现在好好努力。',
+  '最好的投资就是投资自己。',
+  '所有的大人都曾经是小孩，虽然只有少数人记得。',
+  '当你觉得晚了的时候，恰恰是最早的时候。',
+  '保持热爱，奔赴山海。',
+];
+
+function Hitokoto() {
+  const [quote, setQuote] = useState('');
+  const indexRef = useRef(0);
+
+  useEffect(() => {
+    function next() {
+      indexRef.current = (indexRef.current + 1) % hitokotoQuotes.length;
+      setQuote(hitokotoQuotes[indexRef.current]);
+    }
+    next();
+    const timer = setInterval(next, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground" title="一言">
+      <Quote className="h-3 w-3 shrink-0 opacity-50" />
+      <span className="truncate">{quote}</span>
+    </p>
+  );
+}
+
 function App() {
   const shareMatch = window.location.pathname.match(/^\/share\/([^/]+)$/);
   const [authenticated, setAuthenticated] = useState(false);
@@ -1258,7 +1087,6 @@ function App() {
   const [categories, setCategories] = useState([]);
   const [records, setRecords] = useState([]);
   const [aiConfigs, setAiConfigs] = useState([]);
-  const [contacts, setContacts] = useState([]);
   const [sharesList, setSharesList] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState('');
   const [recordForm, setRecordForm] = useState(emptyRecord);
@@ -1300,7 +1128,7 @@ function App() {
         '---',
         recordForm.summary ? `> ${recordForm.summary}` : '',
         recordForm.url ? `> 来源: ${recordForm.url}` : '',
-        recordForm.tags?.length ? `> 标签: ${recordForm.tags.join(', ')}` : '',
+        recordForm.tags ? `> 标签: ${toTagText(recordForm.tags)}` : '',
         `> 优先级: ${recordForm.priority}`,
       ].filter(Boolean);
       content = lines.join('\n');
@@ -1332,16 +1160,6 @@ function App() {
     return counts;
   }, {}), [records]);
 
-  const stats = useMemo(() => {
-    const total = records.length;
-    const web = records.filter((r) => r.sourceType === 'web').length;
-    const manual = total - web;
-    const tagged = records.filter((r) => r.tags?.length > 0).length;
-    const highPriority = records.filter((r) => r.priority >= 4).length;
-    const categoriesCount = categories.length;
-    return { total, web, manual, tagged, highPriority, categoriesCount };
-  }, [records, categories]);
-
   const filteredRecords = useMemo(() => {
     return records.filter((record) => {
       if (activeCategoryId && record.categoryId !== activeCategoryId) return false;
@@ -1350,7 +1168,6 @@ function App() {
   }, [activeCategoryId, records]);
 
   const autoSaveTimerRef = useRef(null);
-  const autoSaveDraftRef = useRef(null);
 
   function autoSaveDraft() {
     if (!recordForm.id || !recordForm.title) return;
@@ -1382,28 +1199,31 @@ function App() {
     };
   }, [recordForm.id, recordForm.markdown, recordForm.title, recordForm.summary, recordForm.tags]);
 
+  const latestRef = useRef({ recordForm, saveRecord, deleteRecord, resetRecordForm, exportRecord, setShareDialogOpen });
+  latestRef.current = { recordForm, saveRecord, deleteRecord, resetRecordForm, exportRecord, setShareDialogOpen };
+
   const handleKeyboardShortcuts = useMemo(() => ({
     's': () => {
-      if (recordForm.id) saveRecord(new Event('submit'));
+      if (latestRef.current.recordForm.id) latestRef.current.saveRecord(new Event('submit'));
     },
-    'n': () => resetRecordForm(),
+    'n': () => latestRef.current.resetRecordForm(),
     'd': () => {
-      if (recordForm.id) deleteRecord();
+      if (latestRef.current.recordForm.id) latestRef.current.deleteRecord();
     },
     'f': () => {
       const input = document.querySelector('.scroll-list')?.closest('.min-h-0')?.querySelector('input[placeholder*="搜索"]');
       if (input) input.focus();
     },
     'shift+s': () => {
-      if (recordForm.id) setShareDialogOpen(true);
+      if (latestRef.current.recordForm.id) latestRef.current.setShareDialogOpen(true);
     },
     'shift+e': () => {
-      if (recordForm.id) exportRecord('markdown');
+      if (latestRef.current.recordForm.id) latestRef.current.exportRecord('markdown');
     },
     'shift+j': () => {
-      if (recordForm.id) exportRecord('json');
+      if (latestRef.current.recordForm.id) latestRef.current.exportRecord('json');
     },
-  }), [recordForm.id, recordForm.title]);
+  }), []);
 
   useKeyboardShortcuts(handleKeyboardShortcuts);
 
@@ -1411,17 +1231,15 @@ function App() {
     setLoading(true);
     setError('');
     try {
-      const [nextCategories, nextRecords, nextAiConfigs, nextContacts, nextShares] = await Promise.all([
+      const [nextCategories, nextRecords, nextAiConfigs, nextShares] = await Promise.all([
         api('/api/categories'),
         api('/api/records'),
         api('/api/ai-configs'),
-        api('/api/contacts'),
         api('/api/shares'),
       ]);
       setCategories(nextCategories);
       setRecords(nextRecords);
       setAiConfigs(nextAiConfigs);
-      setContacts(nextContacts);
       setSharesList(nextShares);
       if (!recordForm.categoryId && nextCategories[0]) {
         setRecordForm((current) => ({ ...current, categoryId: nextCategories[0].id }));
@@ -1434,7 +1252,6 @@ function App() {
   }
 
   async function reloadAiConfigs() { setAiConfigs(await api('/api/ai-configs')); }
-  async function reloadContacts() { setContacts(await api('/api/contacts')); }
   async function reloadShares() { setSharesList(await api('/api/shares')); }
 
   async function runJobsOnce() {
@@ -1642,7 +1459,6 @@ function App() {
     setRecords([]);
     setCategories([]);
     setAiConfigs([]);
-    setContacts([]);
     setSharesList([]);
     setRecordForm(emptyRecord);
   }
@@ -1661,9 +1477,7 @@ function App() {
     { id: 'records', label: '记录', icon: FileText },
     { id: 'web', label: '网页', icon: Globe },
     { id: 'ai', label: 'AI 配置', icon: Bot },
-    { id: 'contacts', label: '通知', icon: Users },
     { id: 'shares', label: '分享', icon: Share2 },
-    { id: 'digest', label: '日报', icon: Mail },
   ];
 
   return (
@@ -1672,7 +1486,7 @@ function App() {
         <div className="mx-auto flex max-w-[1560px] items-center gap-4 px-4 py-3">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-semibold">RE Save</h1>
-            <p className="truncate text-xs text-muted-foreground">记录、网页提取、AI 整理与通知发送</p>
+            <Hitokoto />
           </div>
           <Tabs value={view} onValueChange={setView} className="min-w-0">
             <TabsList className="max-w-[720px] overflow-x-auto">
@@ -1724,13 +1538,6 @@ function App() {
 
         {view === 'records' ? (
           <>
-            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" />共 {stats.total} 条记录</span>
-              <span className="flex items-center gap-1.5"><Globe className="h-3.5 w-3.5" />网页 {stats.web}</span>
-              <span className="flex items-center gap-1.5"><Edit3 className="h-3.5 w-3.5" />手动 {stats.manual}</span>
-              <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" />有标签 {stats.tagged}</span>
-              <span className="flex items-center gap-1.5"><Bell className="h-3.5 w-3.5" />高优先级 {stats.highPriority}</span>
-            </div>
             <div className="records-layout">
             <CategoryPanel
               categories={categories}
@@ -1797,27 +1604,7 @@ function App() {
         ) : null}
 
         {view === 'ai' ? <AiConfigView aiConfigs={aiConfigs} onReload={reloadAiConfigs} setMessage={setMessage} setError={setError} /> : null}
-        {view === 'contacts' ? <ContactsView contacts={contacts} onReload={reloadContacts} setMessage={setMessage} setError={setError} /> : null}
         {view === 'shares' ? <ShareManageView sharesList={sharesList} onReload={reloadShares} setMessage={setMessage} setError={setError} /> : null}
-        {view === 'digest' ? (
-          <DigestView
-            categories={categories}
-            aiConfigs={aiConfigs}
-            contacts={contacts}
-            setMessage={setMessage}
-            setError={setError}
-            onJobCreated={(job) =>
-              trackJob(job, {
-                label: '日报发送',
-                onSuccess: async (doneJob) => {
-                  setMessage(
-                    `日报已发送，邮箱收件人 ${doneJob.result?.sent?.email?.recipients?.length || 0} 个`,
-                  );
-                },
-              })
-            }
-          />
-        ) : null}
       </div>
 
       <ShareDialog

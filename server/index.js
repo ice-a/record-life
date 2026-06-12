@@ -31,8 +31,48 @@ const sessionSecret = process.env.SESSION_SECRET || appPassword || 'dev-only-sec
 const cookieName = 're_save_auth';
 const defaultBarkBaseUrl = process.env.BARK_DEFAULT_BASE_URL || 'https://api.day.app';
 
+if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
+  console.error('WARNING: SESSION_SECRET is not set. Using APP_PASSWORD as fallback is insecure in production.');
+}
+
 let mongoClient;
 let database;
+
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+
+function isLoginRateLimited(ip) {
+  const now = Date.now();
+  const record = loginAttempts.get(ip);
+  if (!record) return false;
+  if (now - record.windowStart > LOGIN_WINDOW_MS) {
+    loginAttempts.delete(ip);
+    return false;
+  }
+  return record.count >= LOGIN_MAX_ATTEMPTS;
+}
+
+function recordLoginAttempt(ip) {
+  const now = Date.now();
+  const record = loginAttempts.get(ip);
+  if (!record || now - record.windowStart > LOGIN_WINDOW_MS) {
+    loginAttempts.set(ip, { windowStart: now, count: 1 });
+  } else {
+    record.count += 1;
+  }
+}
+
+function clearLoginAttempts(ip) {
+  loginAttempts.delete(ip);
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of loginAttempts) {
+    if (now - record.windowStart > LOGIN_WINDOW_MS) loginAttempts.delete(ip);
+  }
+}, LOGIN_WINDOW_MS).unref?.();
 
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
@@ -56,7 +96,19 @@ function verifyToken(token) {
   }
 
   const [encoded, signature] = token.split('.');
-  if (!encoded || !signature || signature !== sign(encoded)) {
+  if (!encoded || !signature) {
+    return false;
+  }
+
+  const expectedSig = sign(encoded);
+  if (expectedSig.length !== signature.length) {
+    return false;
+  }
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expectedSig, 'hex'))) {
+      return false;
+    }
+  } catch {
     return false;
   }
 
@@ -1028,12 +1080,23 @@ app.get('/api/session', (req, res) => {
 });
 
 app.post('/api/login', (req, res) => {
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  if (isLoginRateLimited(ip)) {
+    res.status(429).json({ message: '登录尝试过多，请 15 分钟后再试。' });
+    return;
+  }
+
   const password = String(req.body?.password || '');
-  if (password !== appPassword) {
+
+  const passwordBuf = Buffer.from(password);
+  const expectedBuf = Buffer.from(appPassword);
+  if (passwordBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(passwordBuf, expectedBuf)) {
+    recordLoginAttempt(ip);
     res.status(401).json({ message: '密码不正确。' });
     return;
   }
 
+  clearLoginAttempts(ip);
   res.cookie(cookieName, createToken(), {
     httpOnly: true,
     sameSite: 'lax',
@@ -1237,7 +1300,6 @@ async function handleRunJobs(req, res, next) {
 }
 
 app.post('/api/jobs/run', handleRunJobs);
-app.get('/api/jobs/run', handleRunJobs);
 
 app.get('/api/shares', requireAuth, async (req, res, next) => {
   try {
