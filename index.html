@@ -6,6 +6,13 @@
     <title>RE Save</title>
   </head>
   <body>
+    <script>
+      (function() {
+        var t = localStorage.getItem('re_save_theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.classList.add(t);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

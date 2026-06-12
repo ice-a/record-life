@@ -1078,6 +1078,55 @@ app.post('/api/categories', requireAuth, async (req, res, next) => {
   }
 });
 
+app.put('/api/categories/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = toId(req.params.id);
+    const name = String(req.body?.name || '').trim();
+    if (!name) {
+      res.status(400).json({ message: '分类名称不能为空。' });
+      return;
+    }
+
+    const existing = await categories().findOne({ _id: id });
+    if (!existing) {
+      res.status(404).json({ message: '分类不存在。' });
+      return;
+    }
+
+    const duplicate = await categories().findOne({ name, _id: { $ne: id } });
+    if (duplicate) {
+      res.status(409).json({ message: '分类名称已存在。' });
+      return;
+    }
+
+    const result = await categories().findOneAndUpdate(
+      { _id: id },
+      { $set: { name, updatedAt: new Date() } },
+      { returnDocument: 'after' },
+    );
+    res.json(publicDoc(result));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/categories/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = toId(req.params.id);
+    const existing = await categories().findOne({ _id: id });
+    if (!existing) {
+      res.status(404).json({ message: '分类不存在。' });
+      return;
+    }
+
+    await categories().deleteOne({ _id: id });
+    await records().updateMany({ categoryId: id.toString() }, { $set: { categoryId: '' } });
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/records', requireAuth, async (req, res, next) => {
   try {
     const query = {};

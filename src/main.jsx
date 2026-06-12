@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -7,16 +7,18 @@ import {
   Bot,
   Check,
   Copy,
+  Download,
   Edit3,
   ExternalLink,
   FileText,
   Globe,
   ImagePlus,
+  Keyboard,
   KeyRound,
-  Link,
   Loader2,
   LogOut,
   Mail,
+  Moon,
   Plus,
   RefreshCw,
   Save,
@@ -24,10 +26,13 @@ import {
   Send,
   Share2,
   Sparkles,
+  Sun,
   Trash2,
   Users,
   X,
 } from 'lucide-react';
+import { api } from '@/lib/api';
+import { useDebounce, useKeyboardShortcuts, useTheme } from '@/lib/hooks';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -91,22 +96,7 @@ const emptyContact = {
   active: true,
 };
 
-async function api(path, options = {}) {
-  const hasBody = options.body && !(options.body instanceof FormData);
-  const response = await fetch(path, {
-    credentials: 'include',
-    ...options,
-    headers: {
-      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers || {}),
-    },
-  });
 
-  if (response.status === 204) return null;
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || '请求失败');
-  return data;
-}
 
 function toTagText(tags) {
   return Array.isArray(tags) ? tags.join(', ') : tags || '';
@@ -259,14 +249,28 @@ function Login({ onLogin }) {
   );
 }
 
-function CategoryPanel({ categories, activeCategoryId, recordCounts, onSelect, onCreate, creating }) {
+function CategoryPanel({ categories, activeCategoryId, recordCounts, onSelect, onCreate, onRename, onDelete, creating }) {
   const [name, setName] = useState('');
+  const [editingId, setEditingId] = useState('');
+  const [editName, setEditName] = useState('');
   const total = Object.values(recordCounts).reduce((sum, count) => sum + count, 0);
 
   async function submit(event) {
     event.preventDefault();
     const created = await onCreate(name);
     if (created) setName('');
+  }
+
+  function startRename(category) {
+    setEditingId(category.id);
+    setEditName(category.name);
+  }
+
+  async function saveRename() {
+    if (!editName.trim()) return;
+    await onRename(editingId, editName.trim());
+    setEditingId('');
+    setEditName('');
   }
 
   return (
@@ -286,15 +290,59 @@ function CategoryPanel({ categories, activeCategoryId, recordCounts, onSelect, o
           </button>
           <div className="grid gap-1 overflow-auto">
             {categories.map((category) => (
-              <button
-                type="button"
+              <div
                 key={category.id}
-                className={`flex items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${activeCategoryId === category.id ? 'bg-accent text-accent-foreground' : 'hover:bg-accent'}`}
-                onClick={() => onSelect(category.id)}
+                className={`group flex items-center rounded-md px-3 py-2 text-left text-sm transition-colors ${activeCategoryId === category.id ? 'bg-accent text-accent-foreground' : 'hover:bg-accent'}`}
               >
-                <span className="truncate">{category.name}</span>
-                <Badge variant="secondary">{recordCounts[category.id] || 0}</Badge>
-              </button>
+                {editingId === category.id ? (
+                  <div className="flex flex-1 items-center gap-1">
+                    <Input
+                      value={editName}
+                      onChange={(event) => setEditName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') saveRename();
+                        if (event.key === 'Escape') setEditingId('');
+                      }}
+                      className="h-7 py-1 text-sm"
+                      autoFocus
+                    />
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={saveRename}>
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingId('')}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="flex flex-1 items-center justify-between gap-1"
+                      onClick={() => onSelect(category.id)}
+                    >
+                      <span className="truncate">{category.name}</span>
+                      <Badge variant="secondary">{recordCounts[category.id] || 0}</Badge>
+                    </button>
+                    <div className="ml-1 flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startRename(category)} title="重命名">
+                        <Edit3 className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-destructive"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDelete(category.id, category.name);
+                        }}
+                        title="删除"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -309,7 +357,19 @@ function CategoryPanel({ categories, activeCategoryId, recordCounts, onSelect, o
   );
 }
 
-function RecordList({ records, activeId, query, onQueryChange, onSelect, onCreate, categoryName }) {
+function RecordList({ records, activeId, onSelect, onCreate, categoryName }) {
+  const [localQuery, setLocalQuery] = useState('');
+  const debouncedQuery = useDebounce(localQuery, 250);
+
+  const displayRecords = useMemo(() => {
+    const q = debouncedQuery.trim().toLowerCase();
+    if (!q) return records;
+    return records.filter((record) => {
+      const haystack = [record.title, record.summary, record.content, record.markdown, record.url, record.sourceType, ...(record.tags || [])].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [debouncedQuery, records]);
+
   return (
     <Card className="min-h-0">
       <CardHeader>
@@ -327,15 +387,25 @@ function RecordList({ records, activeId, query, onQueryChange, onSelect, onCreat
       <CardContent>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索标题、内容、URL 或标签" />
+          <Input
+            className="pl-9"
+            value={localQuery}
+            onChange={(event) => setLocalQuery(event.target.value)}
+            placeholder="搜索标题、内容、URL 或标签 (Ctrl+F)"
+          />
+          {localQuery ? (
+            <span className="absolute right-3 top-2.5 text-xs text-muted-foreground">
+              {displayRecords.length}/{records.length}
+            </span>
+          ) : null}
         </div>
         <div className="scroll-list mt-4 grid gap-3">
-          {records.length === 0 ? (
+          {displayRecords.length === 0 ? (
             <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-              暂无记录
+              {query ? '没有匹配的记录' : '暂无记录'}
             </div>
           ) : (
-            records.map((record) => (
+            displayRecords.map((record) => (
               <button
                 type="button"
                 key={record.id}
@@ -494,6 +564,8 @@ function RecordEditor({
   onOrganize,
   onUploadImage,
   onShare,
+  onExportMarkdown,
+  onExportJson,
 }) {
   const [aiConfigId, setAiConfigId] = useState('');
   const contentMarkdown = form.markdown;
@@ -514,13 +586,30 @@ function RecordEditor({
           title={form.id ? form.title || '未命名记录' : '新记录'}
           action={
             <div className="flex gap-1">
-              <Button variant="ghost" size="icon" onClick={onReset} title="重置">
+              <Button variant="ghost" size="icon" onClick={onReset} title="重置 (Ctrl+N)">
                 <Edit3 />
               </Button>
               {form.id ? (
                 <Button variant="ghost" size="icon" onClick={onShare} title="分享">
                   <Share2 />
                 </Button>
+              ) : null}
+              {form.id ? (
+                <div className="relative group">
+                  <Button variant="ghost" size="icon" title="导出">
+                    <Download />
+                  </Button>
+                  <div className="absolute right-0 top-full z-50 mt-1 hidden w-40 rounded-md border bg-popover p-1 shadow-md group-hover:block">
+                    <button type="button" className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent" onClick={onExportMarkdown}>
+                      <FileText className="h-4 w-4" />
+                      导出 Markdown
+                    </button>
+                    <button type="button" className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent" onClick={onExportJson}>
+                      <Download className="h-4 w-4" />
+                      导出 JSON
+                    </button>
+                  </div>
+                </div>
               ) : null}
               {form.id ? (
                 <Button variant="ghost" size="icon" onClick={onDelete} title="删除">
@@ -1172,7 +1261,6 @@ function App() {
   const [contacts, setContacts] = useState([]);
   const [sharesList, setSharesList] = useState([]);
   const [activeCategoryId, setActiveCategoryId] = useState('');
-  const [query, setQuery] = useState('');
   const [recordForm, setRecordForm] = useState(emptyRecord);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -1181,6 +1269,56 @@ function App() {
   const [actionLoading, setActionLoading] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
+
+  function exportRecord(format = 'markdown') {
+    if (!recordForm.id) return;
+    let content;
+    let filename;
+    let mimeType;
+
+    if (format === 'json') {
+      const exportData = {
+        title: recordForm.title,
+        categoryId: recordForm.categoryId,
+        priority: recordForm.priority,
+        sourceType: recordForm.sourceType,
+        url: recordForm.url,
+        summary: recordForm.summary,
+        tags: recordForm.tags,
+        markdown: recordForm.markdown,
+        imageUrls: recordForm.imageUrls,
+      };
+      content = JSON.stringify(exportData, null, 2);
+      filename = `${recordForm.title || 'record'}.json`;
+      mimeType = 'application/json';
+    } else {
+      const lines = [
+        recordForm.markdown || recordForm.content || '',
+        '',
+        '---',
+        recordForm.summary ? `> ${recordForm.summary}` : '',
+        recordForm.url ? `> 来源: ${recordForm.url}` : '',
+        recordForm.tags?.length ? `> 标签: ${recordForm.tags.join(', ')}` : '',
+        `> 优先级: ${recordForm.priority}`,
+      ].filter(Boolean);
+      content = lines.join('\n');
+      filename = `${recordForm.title || 'record'}.md`;
+      mimeType = 'text/markdown';
+    }
+
+    const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setMessage(`已导出 ${format === 'json' ? 'JSON' : 'Markdown'} 文件`);
+  }
 
   if (shareMatch) return <PublicSharePage token={decodeURIComponent(shareMatch[1])} />;
 
@@ -1194,15 +1332,80 @@ function App() {
     return counts;
   }, {}), [records]);
 
+  const stats = useMemo(() => {
+    const total = records.length;
+    const web = records.filter((r) => r.sourceType === 'web').length;
+    const manual = total - web;
+    const tagged = records.filter((r) => r.tags?.length > 0).length;
+    const highPriority = records.filter((r) => r.priority >= 4).length;
+    const categoriesCount = categories.length;
+    return { total, web, manual, tagged, highPriority, categoriesCount };
+  }, [records, categories]);
+
   const filteredRecords = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
     return records.filter((record) => {
       if (activeCategoryId && record.categoryId !== activeCategoryId) return false;
-      if (!normalizedQuery) return true;
-      const haystack = [record.title, record.summary, record.content, record.markdown, record.url, record.sourceType, ...(record.tags || [])].filter(Boolean).join(' ').toLowerCase();
-      return haystack.includes(normalizedQuery);
+      return true;
     });
-  }, [activeCategoryId, query, records]);
+  }, [activeCategoryId, records]);
+
+  const autoSaveTimerRef = useRef(null);
+  const autoSaveDraftRef = useRef(null);
+
+  function autoSaveDraft() {
+    if (!recordForm.id || !recordForm.title) return;
+    try {
+      const drafts = JSON.parse(localStorage.getItem('re_save_drafts') || '{}');
+      drafts[recordForm.id] = {
+        ...recordForm,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem('re_save_drafts', JSON.stringify(drafts));
+    } catch {}
+  }
+
+  function clearDraft(recordId) {
+    try {
+      const drafts = JSON.parse(localStorage.getItem('re_save_drafts') || '{}');
+      delete drafts[recordId];
+      localStorage.setItem('re_save_drafts', JSON.stringify(drafts));
+    } catch {}
+  }
+
+  useEffect(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    if (recordForm.id && recordForm.title) {
+      autoSaveTimerRef.current = setTimeout(autoSaveDraft, 5000);
+    }
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [recordForm.id, recordForm.markdown, recordForm.title, recordForm.summary, recordForm.tags]);
+
+  const handleKeyboardShortcuts = useMemo(() => ({
+    's': () => {
+      if (recordForm.id) saveRecord(new Event('submit'));
+    },
+    'n': () => resetRecordForm(),
+    'd': () => {
+      if (recordForm.id) deleteRecord();
+    },
+    'f': () => {
+      const input = document.querySelector('.scroll-list')?.closest('.min-h-0')?.querySelector('input[placeholder*="搜索"]');
+      if (input) input.focus();
+    },
+    'shift+s': () => {
+      if (recordForm.id) setShareDialogOpen(true);
+    },
+    'shift+e': () => {
+      if (recordForm.id) exportRecord('markdown');
+    },
+    'shift+j': () => {
+      if (recordForm.id) exportRecord('json');
+    },
+  }), [recordForm.id, recordForm.title]);
+
+  useKeyboardShortcuts(handleKeyboardShortcuts);
 
   async function loadCoreData() {
     setLoading(true);
@@ -1304,6 +1507,41 @@ function App() {
     }
   }
 
+  async function renameCategory(categoryId, newName) {
+    setError('');
+    try {
+      const updated = await api(`/api/categories/${categoryId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: newName }),
+      });
+      setCategories((current) =>
+        current.map((category) => (category.id === categoryId ? { ...category, name: updated.name } : category)),
+      );
+      setMessage('分类已重命名');
+    } catch (renameError) {
+      setError(renameError.message);
+    }
+  }
+
+  async function deleteCategory(categoryId, categoryName) {
+    if (!window.confirm(`确认删除分类"${categoryName}"？该分类下的记录将变为未分类。`)) return;
+    setError('');
+    try {
+      await api(`/api/categories/${categoryId}`, { method: 'DELETE' });
+      setCategories((current) => current.filter((category) => category.id !== categoryId));
+      setRecords((current) =>
+        current.map((record) => (record.categoryId === categoryId ? { ...record, categoryId: '' } : record)),
+      );
+      if (activeCategoryId === categoryId) {
+        setActiveCategoryId('');
+        resetRecordForm('');
+      }
+      setMessage('分类已删除');
+    } catch (deleteError) {
+      setError(deleteError.message);
+    }
+  }
+
   function resetRecordForm(categoryId = activeCategoryId) {
     setRecordForm({ ...emptyRecord, categoryId: categoryId || categories[0]?.id || '' });
   }
@@ -1323,6 +1561,7 @@ function App() {
         return exists ? current.map((record) => (record.id === saved.id ? saved : record)) : [saved, ...current];
       });
       setRecordForm(normalizeRecord(saved));
+      clearDraft(saved.id);
       setMessage('记录已保存');
     } catch (saveError) {
       setError(saveError.message);
@@ -1337,6 +1576,7 @@ function App() {
     setError('');
     try {
       await api(`/api/records/${recordForm.id}`, { method: 'DELETE' });
+      clearDraft(recordForm.id);
       setRecords((current) => current.filter((record) => record.id !== recordForm.id));
       resetRecordForm();
       setMessage('记录已删除');
@@ -1448,6 +1688,12 @@ function App() {
             </TabsList>
           </Tabs>
           <div className="flex gap-1">
+            <Button variant="ghost" size="icon" onClick={toggleTheme} title={`切换到${theme === 'dark' ? '浅色' : '深色'}模式`}>
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setShortcutsOpen(true)} title="键盘快捷键">
+              <Keyboard className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={loadCoreData} title="刷新">
               <RefreshCw className={loading ? 'spin' : ''} />
             </Button>
@@ -1477,13 +1723,23 @@ function App() {
         ) : null}
 
         {view === 'records' ? (
-          <div className="records-layout">
+          <>
+            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" />共 {stats.total} 条记录</span>
+              <span className="flex items-center gap-1.5"><Globe className="h-3.5 w-3.5" />网页 {stats.web}</span>
+              <span className="flex items-center gap-1.5"><Edit3 className="h-3.5 w-3.5" />手动 {stats.manual}</span>
+              <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" />有标签 {stats.tagged}</span>
+              <span className="flex items-center gap-1.5"><Bell className="h-3.5 w-3.5" />高优先级 {stats.highPriority}</span>
+            </div>
+            <div className="records-layout">
             <CategoryPanel
               categories={categories}
               activeCategoryId={activeCategoryId}
               recordCounts={recordCounts}
               creating={creatingCategory}
               onCreate={createCategory}
+              onRename={renameCategory}
+              onDelete={deleteCategory}
               onSelect={(categoryId) => {
                 setActiveCategoryId(categoryId);
                 resetRecordForm(categoryId);
@@ -1492,8 +1748,6 @@ function App() {
             <RecordList
               records={filteredRecords}
               activeId={recordForm.id}
-              query={query}
-              onQueryChange={setQuery}
               categoryName={activeCategoryName}
               onSelect={(record) => setRecordForm(normalizeRecord(record))}
               onCreate={() => resetRecordForm()}
@@ -1511,8 +1765,11 @@ function App() {
               onOrganize={organizeRecord}
               onUploadImage={uploadImage}
               onShare={() => setShareDialogOpen(true)}
+              onExportMarkdown={() => exportRecord('markdown')}
+              onExportJson={() => exportRecord('json')}
             />
           </div>
+          </>
         ) : null}
 
         {view === 'web' ? (
@@ -1571,6 +1828,33 @@ function App() {
         setMessage={setMessage}
         setError={setError}
       />
+
+      <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Keyboard className="h-5 w-5" />
+              键盘快捷键
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2 text-sm">
+            {[
+              ['Ctrl+S', '保存记录'],
+              ['Ctrl+N', '新建记录'],
+              ['Ctrl+D', '删除记录'],
+              ['Ctrl+F', '聚焦搜索框'],
+              ['Ctrl+Shift+S', '分享记录'],
+              ['Ctrl+Shift+E', '导出 Markdown'],
+              ['Ctrl+Shift+J', '导出 JSON'],
+            ].map(([key, desc]) => (
+              <div key={key} className="flex items-center justify-between rounded-md border px-3 py-2">
+                <span className="text-muted-foreground">{desc}</span>
+                <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs">{key}</kbd>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
