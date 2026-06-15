@@ -688,7 +688,7 @@ function RecordEditor({
               ))}
             </div>
           ) : null}
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex flex-wrap items-center justify-end gap-2 border-t bg-card/95 px-6 py-3 backdrop-blur">
             <div className="w-56">
               <Select value={aiConfigId || 'default'} onValueChange={(value) => setAiConfigId(value === 'default' ? '' : value)}>
                 <SelectTrigger><SelectValue placeholder="AI 配置" /></SelectTrigger>
