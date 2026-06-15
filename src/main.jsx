@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -83,8 +83,6 @@ const emptyAiConfig = {
   isDefault: false,
 };
 
-
-
 function toTagText(tags) {
   return Array.isArray(tags) ? tags.join(', ') : tags || '';
 }
@@ -109,8 +107,6 @@ function normalizeAiConfig(config) {
     maxTokens: config.maxTokens ?? '',
   };
 }
-
-
 
 function formatDate(value) {
   if (!value) return '';
@@ -1261,7 +1257,7 @@ function App() {
     }).catch(() => null);
   }
 
-  async function trackJob(job, options = {}) {
+  function trackJob(job, options = {}) {
     if (!job?.id) return;
     setMessage(`${options.label || '任务'}已加入队列`);
     runJobsOnce();

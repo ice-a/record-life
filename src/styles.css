@@ -119,12 +119,6 @@ select {
   grid-template-columns: 340px minmax(520px, 1fr);
 }
 
-.digest-layout {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(420px, 560px) minmax(560px, 1fr);
-}
-
 .scroll-list {
   max-height: calc(100vh - 280px);
   overflow: auto;
@@ -309,10 +303,6 @@ select {
   color: hsl(var(--muted-foreground));
 }
 
-.digest-preview {
-  min-height: 520px;
-}
-
 .dark .markdown-body pre {
   background: hsl(220 26% 10%);
 }
@@ -392,8 +382,7 @@ kbd {
     max-height: none;
   }
 
-  .settings-layout,
-  .digest-layout {
+  .settings-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -401,7 +390,6 @@ kbd {
 @media (max-width: 760px) {
   .records-layout,
   .settings-layout,
-  .digest-layout,
   .markdown-workspace,
   .form-grid.two,
   .form-grid.three {
