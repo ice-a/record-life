@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, KeyRound, Loader2, Shield } from 'lucide-react';
+import { Check, Copy, ExternalLink, KeyRound, Loader2, Shield } from 'lucide-react';
 import { api } from '@/lib/api';
+import { toast } from '@/components/Toast';
 import { Field } from '@/components/Field';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -32,6 +33,7 @@ export function PublicSharePage({ token }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     api(`/api/public/shares/${token}/meta`)
@@ -58,6 +60,13 @@ export function PublicSharePage({ token }) {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function copyLink() {
+    await navigator.clipboard?.writeText(window.location.href).catch(() => null);
+    setCopied(true);
+    toast('链接已复制');
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
@@ -90,6 +99,10 @@ export function PublicSharePage({ token }) {
                   <a href={record.url} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />打开原网页</a>
                 </Button>
               ) : null}
+              <Button variant="ghost" size="sm" onClick={copyLink}>
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? '已复制' : '复制链接'}
+              </Button>
             </div>
 
             {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}

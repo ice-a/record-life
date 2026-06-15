@@ -329,6 +329,12 @@ select {
     linear-gradient(180deg, hsl(var(--background)) 0%, hsl(222 28% 10%) 100%);
 }
 
+.login-bg {
+  background:
+    radial-gradient(ellipse at 30% 20%, hsl(var(--primary) / 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, hsl(var(--primary) / 0.04) 0%, transparent 50%);
+}
+
 .share-topbar {
   align-items: center;
   border-bottom: 1px solid hsl(var(--border));
