@@ -474,10 +474,15 @@ function App() {
 
   return (
     <main className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="mx-auto flex max-w-[1560px] items-center gap-4 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-semibold">RE Save</h1>
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold shadow-sm shadow-primary/20">
+                R
+              </div>
+              <h1 className="truncate text-lg font-semibold">RE Save</h1>
+            </div>
             <Hitokoto />
           </div>
           <Tabs value={view} onValueChange={setView} className="min-w-0">

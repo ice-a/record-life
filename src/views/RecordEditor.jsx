@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Download, Edit3, FileText, ImagePlus, Loader2, Save, Share2, Sparkles, Trash2, X } from 'lucide-react';
+import { Download, Edit3, FileText, ImagePlus, Loader2, Save, Share2, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { api } from '@/lib/api';
+import { toast } from '@/components/Toast';
 import { Field } from '@/components/Field';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -27,6 +29,7 @@ export function RecordEditor({
   onExportJson,
 }) {
   const [aiConfigId, setAiConfigId] = useState('');
+  const [filling, setFilling] = useState(false);
   const contentMarkdown = form.markdown;
 
   function updateField(field, value) {
@@ -35,6 +38,34 @@ export function RecordEditor({
 
   function removeImage(url) {
     onChange({ ...form, imageUrls: form.imageUrls.filter((item) => item !== url) });
+  }
+
+  async function aiFill() {
+    if (!contentMarkdown || !contentMarkdown.trim()) {
+      toast('请先填写内容', 'error');
+      return;
+    }
+    setFilling(true);
+    try {
+      const result = await api('/api/records/fill-with-ai', {
+        method: 'POST',
+        body: JSON.stringify({ markdown: contentMarkdown, title: form.title, aiConfigId }),
+      });
+      const patch = {};
+      if (result.title) patch.title = result.title;
+      if (result.summary) patch.summary = result.summary;
+      if (result.tags?.length) patch.tags = result.tags.join(', ');
+      if (Object.keys(patch).length) {
+        onChange({ ...form, ...patch });
+        toast('AI 已填充标题、摘要和标签');
+      } else {
+        toast('AI 未返回有效内容', 'error');
+      }
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setFilling(false);
+    }
   }
 
   return (
@@ -181,6 +212,10 @@ export function RecordEditor({
             <Button type="button" variant="outline" disabled={!form.id || actionLoading} onClick={() => onOrganize(aiConfigId)}>
               {actionLoading ? <Loader2 className="spin" /> : <Sparkles />}
               AI 整理
+            </Button>
+            <Button type="button" variant="outline" disabled={filling || !contentMarkdown} onClick={aiFill}>
+              {filling ? <Loader2 className="spin" /> : <Wand2 />}
+              AI 填充
             </Button>
             <Button type="submit" disabled={saving}>
               {saving ? <Loader2 className="spin" /> : <Save />}

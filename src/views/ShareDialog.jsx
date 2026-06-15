@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Copy, Loader2, Share2, Trash2 } from 'lucide-react';
+import { Check, Copy, ExternalLink, Loader2, Share2, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from '@/components/Toast';
 import { Field } from '@/components/Field';
@@ -14,6 +14,7 @@ export function ShareDialog({ open, record, onClose, onChanged, setError }) {
   const [sharesList, setSharesList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [createdUrl, setCreatedUrl] = useState('');
+  const [copiedToken, setCopiedToken] = useState('');
 
   useEffect(() => {
     if (!open || !record?.id) return;
@@ -68,6 +69,13 @@ export function ShareDialog({ open, record, onClose, onChanged, setError }) {
     }
   }
 
+  async function copyShare(token) {
+    await navigator.clipboard?.writeText(shareUrl(token)).catch(() => null);
+    setCopiedToken(token);
+    toast('链接已复制');
+    setTimeout(() => setCopiedToken(''), 2000);
+  }
+
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent>
@@ -81,7 +89,9 @@ export function ShareDialog({ open, record, onClose, onChanged, setError }) {
           </Field>
           {createdUrl ? (
             <Alert variant="success">
-              <AlertDescription>分享链接：{createdUrl}</AlertDescription>
+              <AlertDescription className="flex items-center gap-2">
+                <span className="truncate text-sm">{createdUrl}</span>
+              </AlertDescription>
             </Alert>
           ) : null}
           <Separator />
@@ -91,17 +101,17 @@ export function ShareDialog({ open, record, onClose, onChanged, setError }) {
               <p className="text-sm text-muted-foreground">暂无分享链接。</p>
             ) : (
               sharesList.map((share) => (
-                <div key={share.token} className="grid grid-cols-[1fr_auto] gap-2 rounded-md border p-3">
-                  <div className="min-w-0">
+                <div key={share.token} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:border-primary/30">
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm">{shareUrl(share.token)}</p>
                     <p className="text-xs text-muted-foreground">{share.hasPassword ? '需要密码' : '无需密码'}</p>
                   </div>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => navigator.clipboard?.writeText(shareUrl(share.token))}>
-                      <Copy />
+                  <div className="flex shrink-0 gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => copyShare(share.token)}>
+                      {copiedToken === share.token ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => deleteShare(share.token)}>
-                      <Trash2 />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>

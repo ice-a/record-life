@@ -106,8 +106,8 @@ export function WebCaptureView({ categories, aiConfigs, onJobCreated, setError }
           </form>
 
           {jobStatus && jobStatus.step !== 'done' && (
-            <div className="mt-4 rounded-lg border p-4">
-              <div className="grid gap-2">
+            <div className="mt-6 rounded-xl border p-5">
+              <div className="grid gap-3">
                 {steps.map((step, idx) => {
                   const stepIdx = steps.findIndex((s) => s.key === jobStatus.step);
                   const isDone = idx < stepIdx;
@@ -133,7 +133,7 @@ export function WebCaptureView({ categories, aiConfigs, onJobCreated, setError }
                 })}
               </div>
               {jobStatus.step === 'failed' && (
-                <Button variant="outline" size="sm" className="mt-3" onClick={retry}>
+                <Button variant="outline" size="sm" className="mt-4" onClick={retry}>
                   <RefreshCw className="h-3.5 w-3.5" />
                   重试
                 </Button>

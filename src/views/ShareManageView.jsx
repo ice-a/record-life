@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { Copy, ExternalLink, Globe, Loader2, RefreshCw, Shield, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { toast } from '@/components/Toast';
@@ -42,23 +42,48 @@ export function ShareManageView({ sharesList, onReload, setError }) {
       </CardHeader>
       <CardContent>
         {sharesList.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">暂无分享链接。</div>
+          <div className="rounded-lg border border-dashed p-16 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+              <ExternalLink className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <p className="text-base font-medium text-muted-foreground">暂无分享链接</p>
+            <p className="mt-2 text-sm text-muted-foreground">在记录编辑器中点击分享按钮创建</p>
+          </div>
         ) : (
           <div className="grid gap-3">
             {sharesList.map((share) => (
-              <div key={share.token} className="grid gap-3 rounded-lg border p-4 md:grid-cols-[1fr_auto] md:items-center">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <strong>{share.title || '未命名记录'}</strong>
-                    <Badge variant={share.hasPassword ? 'default' : 'outline'}>{share.hasPassword ? '有密码' : '无密码'}</Badge>
-                    {share.missingRecord ? <Badge variant="destructive">记录已不存在</Badge> : null}
+              <div key={share.token} className="group rounded-xl border p-5 transition-colors hover:border-primary/30 hover:shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    {share.missingRecord ? <Shield className="h-5 w-5" /> : <Globe className="h-5 w-5" />}
                   </div>
-                  <p className="mt-1 truncate text-sm text-muted-foreground">{shareUrl(share.token)}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">创建时间：{formatDate(share.createdAt)}{share.recordUrl ? ` · 来源：${share.recordUrl}` : ''}</p>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => copyShare(share.token)}><Copy />复制</Button>
-                  <Button variant="destructive" onClick={() => deleteShare(share.token)}><Trash2 />删除</Button>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong className="text-sm">{share.title || '未命名记录'}</strong>
+                      <Badge variant={share.hasPassword ? 'default' : 'outline'} className="text-xs">
+                        {share.hasPassword ? '有密码' : '无密码'}
+                      </Badge>
+                      {share.missingRecord ? <Badge variant="destructive" className="text-xs">记录已不存在</Badge> : null}
+                    </div>
+                    <p className="mt-1.5 truncate text-sm text-muted-foreground">{shareUrl(share.token)}</p>
+                    <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>创建于 {formatDate(share.createdAt)}</span>
+                      {share.recordUrl ? (
+                        <span className="flex items-center gap-1 truncate">
+                          <Globe className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{share.recordUrl}</span>
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                    <Button variant="outline" size="sm" onClick={() => copyShare(share.token)}>
+                      <Copy className="h-3.5 w-3.5" />复制
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => deleteShare(share.token)}>
+                      <Trash2 className="h-3.5 w-3.5" />删除
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}

@@ -80,7 +80,7 @@ body {
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   margin: 0;
-  transition: background-color 0.2s, color 0.2s;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 body::selection {
@@ -97,14 +97,19 @@ select {
 .records-layout {
   display: grid;
   align-items: stretch;
-  gap: 0.875rem;
+  gap: 1rem;
   grid-template-columns: minmax(210px, 0.58fr) minmax(300px, 0.9fr) minmax(680px, 1.9fr);
   min-height: calc(100vh - 136px);
 }
 
 .records-layout > .rounded-lg {
   border-color: hsl(var(--border) / 0.78);
-  box-shadow: 0 10px 28px hsl(220 20% 20% / 0.06);
+  box-shadow: 0 1px 3px hsl(220 20% 20% / 0.04), 0 8px 24px hsl(220 20% 20% / 0.04);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.records-layout > .rounded-lg:hover {
+  box-shadow: 0 2px 6px hsl(220 20% 20% / 0.06), 0 12px 32px hsl(220 20% 20% / 0.06);
 }
 
 .editor-panel > div:last-child {
@@ -123,6 +128,24 @@ select {
   max-height: calc(100vh - 280px);
   overflow: auto;
   padding-right: 2px;
+  scroll-behavior: smooth;
+}
+
+.scroll-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scroll-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-list::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 2px;
+}
+
+.scroll-list::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
 }
 
 .form-grid {
@@ -312,11 +335,15 @@ select {
 }
 
 .dark .records-layout > .rounded-lg {
-  box-shadow: 0 10px 28px hsl(220 20% 5% / 0.15);
+  box-shadow: 0 1px 3px hsl(220 20% 5% / 0.1), 0 8px 24px hsl(220 20% 5% / 0.12);
+}
+
+.dark .records-layout > .rounded-lg:hover {
+  box-shadow: 0 2px 6px hsl(220 20% 5% / 0.12), 0 12px 32px hsl(220 20% 5% / 0.18);
 }
 
 .dark .share-article {
-  box-shadow: 0 16px 40px hsl(220 20% 5% / 0.2);
+  box-shadow: 0 2px 6px hsl(220 20% 5% / 0.1), 0 12px 32px hsl(220 20% 5% / 0.15);
 }
 
 .share-page {
@@ -347,9 +374,9 @@ select {
 .share-article {
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
-  box-shadow: 0 16px 40px hsl(220 20% 20% / 0.08);
-  padding: clamp(1.25rem, 3vw, 2.5rem);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px hsl(220 20% 20% / 0.04), 0 12px 32px hsl(220 20% 20% / 0.06);
+  padding: clamp(1.5rem, 3vw, 2.5rem);
 }
 
 .share-meta-row {
@@ -395,12 +422,30 @@ kbd {
 }
 
 .view-fade-in {
-  animation: viewFadeIn 0.25s ease-out;
+  animation: viewFadeIn 0.3s ease-out;
 }
 
 @keyframes viewFadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.3s ease-out;
 }
 
 @media (max-width: 1240px) {

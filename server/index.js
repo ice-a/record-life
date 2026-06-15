@@ -1270,6 +1270,36 @@ app.post('/api/records/:id/organize', requireAuth, async (req, res, next) => {
   }
 });
 
+app.post('/api/records/fill-with-ai', requireAuth, async (req, res, next) => {
+  try {
+    const { markdown, title, aiConfigId } = req.body || {};
+    if (!markdown || !String(markdown).trim()) {
+      res.status(400).json({ message: '请先填写内容。' });
+      return;
+    }
+
+    const content = await callAi(aiConfigId || '', [
+      {
+        role: 'system',
+        content:
+          '你是记录整理助手。请根据用户提供的 Markdown 内容，自动生成合适的标题、摘要和标签。只返回 JSON，不要输出 Markdown 代码块。JSON 字段包括 title、summary、tags。title 用简洁的中文标题，summary 用一句话概括核心内容，tags 必须是中文或英文短标签数组，最多 6 个。',
+      },
+      {
+        role: 'user',
+        content: `请根据以下内容生成标题、摘要和标签。\n\n当前标题：${title || '无'}\n\n内容：\n${String(markdown || '').slice(0, 24000)}`,
+      },
+    ]);
+    const parsed = parseJsonLoose(content);
+    res.json({
+      title: String(parsed.title || '').trim(),
+      summary: String(parsed.summary || '').trim(),
+      tags: Array.isArray(parsed.tags) ? parsed.tags.map((tag) => String(tag).trim()).filter(Boolean) : [],
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/jobs/:id', requireAuth, async (req, res, next) => {
   try {
     const job = await jobs().findOne({ _id: toId(req.params.id) });

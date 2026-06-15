@@ -92,7 +92,7 @@ export function RecordList({
             {sortDir === 'desc' ? '降序' : '升序'}
           </button>
         </div>
-        <div className="scroll-list mt-3 grid gap-3">
+        <div className="scroll-list mt-3 grid gap-2">
           {displayRecords.length === 0 ? (
             <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
               {localQuery ? '没有匹配的记录' : '暂无记录'}
@@ -101,39 +101,37 @@ export function RecordList({
             displayRecords.map((record) => (
               <div
                 key={record.id}
-                className={`group rounded-lg border bg-card p-4 transition hover:border-primary/60 hover:shadow-sm ${activeId === record.id ? 'border-primary shadow-sm' : ''}`}
+                className={`group cursor-pointer rounded-xl border p-4 transition-all duration-150 hover:border-primary/30 hover:shadow-sm ${activeId === record.id ? 'border-primary bg-primary/5 shadow-sm' : ''}`}
+                onClick={() => onSelect(record)}
               >
-                <div className="flex items-start gap-2">
+                <div className="flex items-start gap-3">
                   <div className="pt-0.5">
                     <Checkbox
                       checked={selectedIds.has(record.id)}
                       onCheckedChange={() => onToggleSelect(record.id)}
+                      onClick={(e) => e.stopPropagation()}
                     />
                   </div>
-                  <button
-                    type="button"
-                    className="flex-1 text-left"
-                    onClick={() => onSelect(record)}
-                  >
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      {record.sourceType === 'web' ? <Globe className="h-4 w-4 text-primary" /> : <FileText className="h-4 w-4 text-primary" />}
-                      <strong className="truncate text-sm">{record.title}</strong>
+                      {record.sourceType === 'web' ? <Globe className="h-4 w-4 shrink-0 text-primary" /> : <FileText className="h-4 w-4 shrink-0 text-primary" />}
+                      <strong className="truncate text-sm font-medium">{record.title}</strong>
                     </div>
-                    <p className="two-line mt-2 text-sm text-muted-foreground">
+                    <p className="two-line mt-1.5 text-sm text-muted-foreground leading-relaxed">
                       {record.summary || record.markdown || record.content || '无摘要'}
                     </p>
-                    <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="mt-2.5 flex items-center justify-between text-xs text-muted-foreground">
                       <span>优先级 {record.priority || 3}</span>
                       <span>{record.updatedAt ? new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(record.updatedAt)) : ''}</span>
                     </div>
                     {record.tags?.length ? (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
+                      <div className="mt-2.5 flex flex-wrap gap-1.5">
                         {record.tags.slice(0, 4).map((tag) => (
-                          <Badge key={tag} variant="outline">{tag}</Badge>
+                          <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
                         ))}
                       </div>
                     ) : null}
-                  </button>
+                  </div>
                 </div>
               </div>
             ))

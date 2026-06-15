@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Edit3, Plus, Trash2, X } from 'lucide-react';
+import { Check, Edit3, FolderOpen, Plus, Trash2, X } from 'lucide-react';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,17 +39,20 @@ export function CategoryPanel({ categories, activeCategoryId, recordCounts, onSe
         <div className="grid gap-1">
           <button
             type="button"
-            className={`flex items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${activeCategoryId === '' ? 'bg-accent text-accent-foreground' : 'hover:bg-accent'}`}
+            className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-all duration-150 ${activeCategoryId === '' ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-accent'}`}
             onClick={() => onSelect('')}
           >
-            <span>全部记录</span>
+            <span className="flex items-center gap-2">
+              <FolderOpen className="h-4 w-4" />
+              全部记录
+            </span>
             <Badge variant="secondary">{total}</Badge>
           </button>
-          <div className="grid gap-1 overflow-auto">
+          <div className="grid gap-0.5 overflow-auto">
             {categories.map((category) => (
               <div
                 key={category.id}
-                className={`group flex items-center rounded-md px-3 py-2 text-left text-sm transition-colors ${activeCategoryId === category.id ? 'bg-accent text-accent-foreground' : 'hover:bg-accent'}`}
+                className={`group flex items-center rounded-xl px-3 py-2 text-left text-sm transition-all duration-150 ${activeCategoryId === category.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-accent'}`}
               >
                 {editingId === category.id ? (
                   <div className="flex flex-1 items-center gap-1">
