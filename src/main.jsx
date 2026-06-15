@@ -521,7 +521,7 @@ function App() {
         ) : null}
 
         {view === 'records' ? (
-          <>
+          <div className="view-fade-in">
             <div className="records-layout">
             <CategoryPanel
               categories={categories}
@@ -570,10 +570,11 @@ function App() {
               onExportJson={() => exportRecord('json')}
             />
           </div>
-          </>
+          </div>
         ) : null}
 
         {view === 'web' ? (
+          <div className="view-fade-in">
           <WebCaptureView
             categories={categories}
             aiConfigs={aiConfigs}
@@ -594,10 +595,11 @@ function App() {
               })
             }
           />
+          </div>
         ) : null}
 
-        {view === 'ai' ? <AiConfigView aiConfigs={aiConfigs} onReload={reloadAiConfigs} setError={setError} /> : null}
-        {view === 'shares' ? <ShareManageView sharesList={sharesList} onReload={reloadShares} setError={setError} /> : null}
+        {view === 'ai' ? <div className="view-fade-in"><AiConfigView aiConfigs={aiConfigs} onReload={reloadAiConfigs} setError={setError} /></div> : null}
+        {view === 'shares' ? <div className="view-fade-in"><ShareManageView sharesList={sharesList} onReload={reloadShares} setError={setError} /></div> : null}
       </div>
 
       <ShareDialog

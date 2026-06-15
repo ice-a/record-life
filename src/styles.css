@@ -324,6 +324,11 @@ select {
     linear-gradient(180deg, hsl(var(--background)) 0%, hsl(160 18% 95%) 100%);
 }
 
+.share-page.dark {
+  background:
+    linear-gradient(180deg, hsl(var(--background)) 0%, hsl(222 28% 10%) 100%);
+}
+
 .share-topbar {
   align-items: center;
   border-bottom: 1px solid hsl(var(--border));
@@ -381,6 +386,15 @@ kbd {
 
 .animate-in {
   animation: slideInFromBottom 0.3s ease-out;
+}
+
+.view-fade-in {
+  animation: viewFadeIn 0.25s ease-out;
+}
+
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 1240px) {
