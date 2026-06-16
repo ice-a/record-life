@@ -99,7 +99,7 @@ select {
   display: grid;
   align-items: stretch;
   gap: 1rem;
-  grid-template-columns: minmax(210px, 0.58fr) minmax(300px, 0.9fr) minmax(0, 1.9fr);
+  grid-template-columns: 220px 320px 1fr;
   min-height: calc(100vh - 136px);
   overflow: hidden;
 }
