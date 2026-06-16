@@ -80,6 +80,7 @@ body {
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   margin: 0;
+  overflow-x: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -105,11 +106,6 @@ select {
 .records-layout > .rounded-lg {
   border-color: hsl(var(--border) / 0.78);
   box-shadow: 0 1px 3px hsl(220 20% 20% / 0.04), 0 8px 24px hsl(220 20% 20% / 0.04);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.records-layout > .rounded-lg:hover {
-  box-shadow: 0 2px 6px hsl(220 20% 20% / 0.06), 0 12px 32px hsl(220 20% 20% / 0.06);
 }
 
 .editor-panel > div:last-child {
@@ -197,6 +193,7 @@ select {
   font-size: 0.95rem;
   line-height: 1.75;
   overflow-wrap: anywhere;
+  overflow-x: hidden;
 }
 
 .markdown-body > *:first-child {
@@ -295,7 +292,7 @@ select {
 }
 
 .markdown-table-wrap {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .markdown-body table {
@@ -336,10 +333,6 @@ select {
 
 .dark .records-layout > .rounded-lg {
   box-shadow: 0 1px 3px hsl(220 20% 5% / 0.1), 0 8px 24px hsl(220 20% 5% / 0.12);
-}
-
-.dark .records-layout > .rounded-lg:hover {
-  box-shadow: 0 2px 6px hsl(220 20% 5% / 0.12), 0 12px 32px hsl(220 20% 5% / 0.18);
 }
 
 .dark .share-article {

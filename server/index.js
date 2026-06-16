@@ -1590,6 +1590,29 @@ app.delete('/api/ai-configs/:id', requireAuth, async (req, res, next) => {
   }
 });
 
+app.post('/api/ai-configs/fetch-models', requireAuth, async (req, res, next) => {
+  try {
+    const { baseUrl, apiKey } = req.body || {};
+    if (!baseUrl || !apiKey) {
+      res.status(400).json({ message: '请填写 Base URL 和 API Key。' });
+      return;
+    }
+    const url = baseUrl.replace(/\/+$/, '') + '/models';
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error?.message || `请求失败：HTTP ${response.status}`);
+    }
+    const models = (data.data || []).map((m) => m.id).filter(Boolean).sort();
+    res.json({ models });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/contacts', requireAuth, async (req, res, next) => {
   try {
     const query = {};

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bot, Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { Bot, Download, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { emptyAiConfig, normalizeAiConfig } from '@/lib/utils';
 import { toast } from '@/components/Toast';
@@ -9,13 +9,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function AiConfigView({ aiConfigs, onReload, setError }) {
   const [form, setForm] = useState(emptyAiConfig);
   const [saving, setSaving] = useState(false);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [modelList, setModelList] = useState([]);
 
   function reset() {
     setForm(emptyAiConfig);
+    setModelList([]);
   }
 
   async function save(event) {
@@ -52,6 +56,30 @@ export function AiConfigView({ aiConfigs, onReload, setError }) {
     }
   }
 
+  async function fetchModels() {
+    if (!form.baseUrl || !form.apiKey) {
+      toast('请先填写 Base URL 和 API Key', 'error');
+      return;
+    }
+    setFetchingModels(true);
+    try {
+      const result = await api('/api/ai-configs/fetch-models', {
+        method: 'POST',
+        body: JSON.stringify({ baseUrl: form.baseUrl, apiKey: form.apiKey }),
+      });
+      setModelList(result.models || []);
+      if (result.models?.length) {
+        toast(`获取到 ${result.models.length} 个模型`);
+      } else {
+        toast('未获取到模型列表', 'error');
+      }
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setFetchingModels(false);
+    }
+  }
+
   return (
     <div className="settings-layout">
       <Card>
@@ -70,7 +98,10 @@ export function AiConfigView({ aiConfigs, onReload, setError }) {
                   type="button"
                   key={config.id}
                   className={`group flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition-all duration-150 hover:bg-accent ${form.id === config.id ? 'bg-accent shadow-sm' : ''}`}
-                  onClick={() => setForm(normalizeAiConfig(config))}
+                  onClick={() => {
+                    setForm(normalizeAiConfig(config));
+                    setModelList([]);
+                  }}
                 >
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <Bot className="h-4 w-4" />
@@ -97,9 +128,28 @@ export function AiConfigView({ aiConfigs, onReload, setError }) {
             </div>
             <Field label="Base URL"><Input value={form.baseUrl} onChange={(event) => setForm({ ...form, baseUrl: event.target.value })} placeholder="https://api.openai.com/v1" /></Field>
             <div className="form-grid two">
-              <Field label="模型名"><Input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} /></Field>
               <Field label="API Key"><Input type="password" value={form.apiKey} onChange={(event) => setForm({ ...form, apiKey: event.target.value })} placeholder={form.hasApiKey ? '已保存，留空不修改' : 'sk-...'} /></Field>
+              <div className="flex items-end">
+                <Button type="button" variant="outline" disabled={fetchingModels || !form.baseUrl || !form.apiKey} onClick={fetchModels} className="w-full">
+                  {fetchingModels ? <Loader2 className="spin" /> : <Download />}
+                  获取模型列表
+                </Button>
+              </div>
             </div>
+            {modelList.length > 0 ? (
+              <Field label="选择模型">
+                <Select value={form.model} onValueChange={(value) => setForm({ ...form, model: value })}>
+                  <SelectTrigger><SelectValue placeholder="从列表中选择模型" /></SelectTrigger>
+                  <SelectContent className="max-h-64">
+                    {modelList.map((model) => (
+                      <SelectItem key={model} value={model}>{model}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : (
+              <Field label="模型名"><Input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} /></Field>
+            )}
             <div className="form-grid three">
               <Field label="温度"><Input value={form.temperature} onChange={(event) => setForm({ ...form, temperature: event.target.value })} /></Field>
               <Field label="最大 Token"><Input value={form.maxTokens} onChange={(event) => setForm({ ...form, maxTokens: event.target.value })} /></Field>
