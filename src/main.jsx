@@ -515,7 +515,7 @@ function App() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1560px] gap-4 px-4 py-4">
+      <div className="mx-auto grid max-w-[1560px] gap-4 overflow-hidden px-4 py-4">
         {error ? (
           <Alert variant="destructive">
             <AlertDescription className="flex items-center justify-between gap-3">
